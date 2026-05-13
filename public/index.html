@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расписание — Интеллект-плюс</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 100 100" width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2"  y="2"  width="30" height="30" fill="#00B0E0"/>
+        <rect x="35" y="2"  width="30" height="30" fill="#E6007E"/>
+        <rect x="68" y="2"  width="30" height="30" fill="#76BC21"/>
+        <rect x="2"  y="35" width="30" height="30" fill="#E6007E"/>
+        <rect x="35" y="35" width="30" height="63" fill="#00B0E0"/>
+        <rect x="68" y="35" width="30" height="30" fill="#FFD600"/>
+        <rect x="2"  y="68" width="30" height="30" fill="#FFD600"/>
+        <rect x="68" y="68" width="30" height="30" fill="#76BC21"/>
+      </svg>
+      <h1>Интеллект-плюс</h1>
+      <div class="login-sub">Расписание · Вход</div>
+    </div>
+    <div id="loginStep1">
+      <div class="login-row">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="ivanova@intellekt-plus.ru" autocomplete="username">
+      </div>
+      <div class="login-row">
+        <label>Пароль</label>
+        <input type="password" id="loginPassword" placeholder="••••••" autocomplete="current-password">
+      </div>
+      <div class="login-hint">Первичный пароль для первого входа: <b>12345</b></div>
+      <button class="btn btn-block" onclick="doLogin()">Войти</button>
+      <div id="loginError" class="login-error"></div>
+    </div>
+    <div id="loginStep2" style="display:none;">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Первый вход. Придумайте новый пароль (мин. 6 символов).</div>
+      <div class="login-row">
+        <label>Новый пароль</label>
+        <input type="password" id="newPwd1" autocomplete="new-password">
+      </div>
+      <div class="login-row">
+        <label>Повторите пароль</label>
+        <input type="password" id="newPwd2" autocomplete="new-password">
+      </div>
+      <button class="btn btn-block" onclick="doChangePassword()">Сохранить пароль и войти</button>
+      <div id="pwdError" class="login-error"></div>
+    </div>
+    <div class="login-footer">
+      <a href="#" onclick="event.preventDefault(); showEmailList();" style="color:var(--ip-blue);font-size:12px;">Не помню свой email</a>
+    </div>
+  </div>
+</div>
+
+<!-- Email list modal -->
+<div id="emailListModal" class="modal-bg">
+  <div class="modal" style="max-width:560px;max-height:80vh;overflow:auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px;">
+      <h3 style="margin:0;">Email-адреса аккаунтов</h3>
+      <button class="link-btn" onclick="document.getElementById('emailListModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Найдите свой аккаунт. Клик заполнит поле входа.</div>
+    <div id="emailListBody"></div>
+  </div>
+</div>
+
+<div class="app" id="appRoot" style="display:none;">
+  <!-- HEADER -->
+  <div class="header">
+    <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Логотип Интеллект-плюс">
+      <rect x="2"  y="2"  width="30" height="30" fill="#00B0E0"/>
+      <rect x="35" y="2"  width="30" height="30" fill="#E6007E"/>
+      <rect x="68" y="2"  width="30" height="30" fill="#76BC21"/>
+      <rect x="2"  y="35" width="30" height="30" fill="#E6007E"/>
+      <rect x="35" y="35" width="30" height="63" fill="#00B0E0"/>
+      <rect x="68" y="35" width="30" height="30" fill="#FFD600"/>
+      <rect x="2"  y="68" width="30" height="30" fill="#FFD600"/>
+      <rect x="68" y="68" width="30" height="30" fill="#76BC21"/>
+    </svg>
+    <div class="brand">
+      <div class="brand-name">Интеллект-плюс</div>
+      <div class="brand-sub">Расписание · Частная школа</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" onclick="showReplacement()">+ Замена</button>
+      <div class="bell-wrap">
+        <button class="bell" id="bellBtn" onclick="toggleInbox()" title="Уведомления">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <span class="bell-badge" id="bellBadge">0</span>
+        </button>
+        <div class="inbox" id="inbox">
+          <div class="inbox-header">
+            <b>Уведомления</b>
+            <button class="link-btn" onclick="markAllRead()">Прочитать все</button>
+          </div>
+          <div id="inboxList"></div>
+        </div>
+      </div>
+      <div class="user-wrap">
+        <button class="user-chip" id="userBtn" onclick="toggleUserMenu()">
+          <span class="user-avatar" id="userAvatar"></span>
+          <span class="user-info">
+            <span class="user-name" id="userName"></span>
+            <span class="user-role" id="userRole"></span>
+          </span>
+          <span style="opacity:0.5;">▾</span>
+        </button>
+        <div class="user-menu" id="userMenu">
+          <div id="userMenuList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP-LEVEL SECTION NAV -->
+  <div class="section-nav">
+    <button class="section-btn active" data-section="schedule" onclick="setSection('schedule')">
+      📅 Расписание
+    </button>
+    <button class="section-btn" data-section="teachers" onclick="setSection('teachers')">
+      👤 Учителя <span class="section-count" id="teachersCount"></span>
+    </button>
+  </div>
+
+  <!-- SCHEDULE SECTION -->
+  <div id="sectionSchedule">
+    <div class="dept-tabs" id="deptTabs"></div>
+    <div class="stats-row" id="statsRow"></div>
+    <div id="conflictPanel"></div>
+    <div class="toolbar">
+      <div id="dayTabs" style="display: flex; gap: 4px;"></div>
+      <div class="spacer"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-right:8px;">
+        <span style="font-size:12px;color:var(--text-muted);">Класс:</span>
+        <select id="classFilter" onchange="setClassFilter(this.value)" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:white;">
+          <option value="all">Все классы</option>
+        </select>
+      </div>
+      <div class="view-switch">
+        <button class="active" data-view="grid" onclick="switchView('grid')">День</button>
+        <button data-view="week" onclick="switchView('week')">Вся неделя</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEACHERS SECTION -->
+  <div id="sectionTeachers" style="display:none;">
+    <div class="toolbar">
+      <input type="text" id="teacherSearch" placeholder="🔍  Поиск по имени или предмету" oninput="renderAllTeachers()" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:white;">
+      <div class="spacer"></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--text-muted);">Сортировка:</span>
+        <select id="teacherSort" onchange="renderAllTeachers()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:white;">
+          <option value="hours_desc">По нагрузке (больше)</option>
+          <option value="hours_asc">По нагрузке (меньше)</option>
+          <option value="name">По фамилии</option>
+          <option value="cross">Кросс-отделение сначала</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="mainContent"></div>
+
+  <div class="footer">© Интеллект-плюс · 3 отделения · 5 дней</div>
+</div>
+
+<!-- Smart Replacement Modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" style="max-width: 720px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px;">
+      <h3 style="margin:0;">Замена учителя</h3>
+      <button class="link-btn" onclick="closeModal()" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row">
+      <label>Кто отсутствует</label>
+      <select id="repTeacher" onchange="onRepTeacherChange()"><option value="">— выберите учителя —</option></select>
+    </div>
+    <div class="modal-row">
+      <label>День</label>
+      <select id="repDay" onchange="onRepDayChange()"></select>
+    </div>
+    <div id="repLessons" style="margin-top: 8px;"></div>
+    <div class="modal-row" style="margin-top: 12px;">
+      <label>Кого уведомить</label>
+      <div id="repNotify" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeModal()">Отмена</button>
+      <button class="btn" onclick="confirmReplacements()" id="repConfirmBtn">Подтвердить замены</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
