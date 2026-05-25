@@ -27,8 +27,8 @@
     </div>
     <div id="loginStep1">
       <div class="login-row">
-        <label>Email</label>
-        <input type="email" id="loginEmail" placeholder="ivanova@intellekt-plus.ru" autocomplete="username">
+        <label>Логин</label>
+        <input type="text" id="loginEmail" placeholder="например: ivanova-ie" autocomplete="username" autocapitalize="off" autocorrect="off">
       </div>
       <div class="login-row">
         <label>Пароль</label>
@@ -52,7 +52,7 @@
       <div id="pwdError" class="login-error"></div>
     </div>
     <div class="login-footer">
-      <a href="#" onclick="event.preventDefault(); showEmailList();" style="color:var(--ip-blue);font-size:12px;">Не помню свой email</a>
+      <a href="#" onclick="event.preventDefault(); showEmailList();" style="color:var(--ip-blue);font-size:12px;">Не помню свой логин</a>
     </div>
   </div>
 </div>
@@ -61,7 +61,7 @@
 <div id="emailListModal" class="modal-bg">
   <div class="modal" style="max-width:560px;max-height:80vh;overflow:auto;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px;">
-      <h3 style="margin:0;">Email-адреса аккаунтов</h3>
+      <h3 style="margin:0;">Логины аккаунтов</h3>
       <button class="link-btn" onclick="document.getElementById('emailListModal').classList.remove('show')" style="font-size:14px;">✕</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Найдите свой аккаунт. Клик заполнит поле входа.</div>
@@ -119,13 +119,55 @@
 
   <!-- TOP-LEVEL SECTION NAV -->
   <div class="section-nav">
-    <button class="section-btn active" data-section="schedule" onclick="setSection('schedule')">
+    <button class="section-btn active" data-section="today" onclick="setSection('today')">
+      ☀️ Сегодня
+    </button>
+    <button class="section-btn" data-section="my" id="myTab" onclick="setSection('my')">
+      📋 Моё расписание
+    </button>
+    <button class="section-btn" data-section="schedule" onclick="setSection('schedule')">
       📅 Расписание
     </button>
     <button class="section-btn" data-section="teachers" onclick="setSection('teachers')">
       👤 Учителя <span class="section-count" id="teachersCount"></span>
     </button>
+    <button class="section-btn" data-section="acsup" onclick="setSection('acsup')">
+      📚 Академ. поддержка
+    </button>
+    <button class="section-btn" data-section="absences" onclick="setSection('absences')">
+      🏖 Отсутствия
+    </button>
+    <button class="section-btn" data-section="history" onclick="setSection('history')">
+      🔄 История замен
+    </button>
+    <button class="section-btn" data-section="schedhist" id="schedHistTab" style="display:none;" onclick="setSection('schedhist')">
+      📋 Версии
+    </button>
+    <button class="section-btn" data-section="admin" id="adminTab" style="display:none;" onclick="setSection('admin')">
+      ⚙️ Сотрудники
+    </button>
   </div>
+
+  <!-- TODAY SECTION -->
+  <div id="sectionToday" style="display:none;"></div>
+
+  <!-- MY SCHEDULE SECTION -->
+  <div id="sectionMy" style="display:none;"></div>
+
+  <!-- HISTORY SECTION -->
+  <div id="sectionHistory" style="display:none;"></div>
+
+  <!-- ACADEMIC SUPPORT SECTION -->
+  <div id="sectionAcsup" style="display:none;"></div>
+
+  <!-- ABSENCES SECTION -->
+  <div id="sectionAbsences" style="display:none;"></div>
+
+  <!-- SCHEDULE HISTORY SECTION -->
+  <div id="sectionSchedhist" style="display:none;"></div>
+
+  <!-- ADMIN SECTION -->
+  <div id="sectionAdmin" style="display:none;"></div>
 
   <!-- SCHEDULE SECTION -->
   <div id="sectionSchedule">
@@ -145,6 +187,8 @@
         <button class="active" data-view="grid" onclick="switchView('grid')">День</button>
         <button data-view="week" onclick="switchView('week')">Вся неделя</button>
       </div>
+      <button class="btn secondary" onclick="printSchedule()" style="margin-left:6px;">🖨 Печать</button>
+      <button id="editModeBtn" class="btn secondary" onclick="toggleEditMode()" style="display:none;margin-left:6px;">✎ Редактировать</button>
     </div>
   </div>
 
@@ -194,6 +238,168 @@
       <button class="btn secondary" onclick="closeModal()">Отмена</button>
       <button class="btn" onclick="confirmReplacements()" id="repConfirmBtn">Подтвердить замены</button>
     </div>
+  </div>
+</div>
+
+<!-- Teacher Card Modal -->
+<div class="modal-bg" id="teacherCardModal">
+  <div class="modal modal-wide">
+    <div id="teacherCardBody"></div>
+  </div>
+</div>
+
+<!-- Class Card Modal -->
+<div class="modal-bg" id="classCardModal">
+  <div class="modal modal-wide">
+    <div id="classCardBody"></div>
+  </div>
+</div>
+
+<!-- Edit Schedule Cell Modal -->
+<div class="modal-bg" id="cellEditModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 id="cellEditTitle" style="margin:0;">Редактирование урока</h3>
+      <button class="link-btn" onclick="document.getElementById('cellEditModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div id="cellEditContext" style="background:#F9FAFB;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--text-muted);"></div>
+    <div class="modal-row">
+      <label>Предмет</label>
+      <input id="ceSubject" type="text" placeholder="Например: Математика" list="subjectsList">
+      <datalist id="subjectsList"></datalist>
+    </div>
+    <div class="modal-row">
+      <label>Учитель</label>
+      <select id="ceTeacher"><option value="">— не выбран —</option></select>
+    </div>
+    <div class="modal-row">
+      <label>Кабинет</label>
+      <input id="ceRoom" type="text" placeholder="313">
+    </div>
+    <div style="margin-bottom: 10px;">
+      <button class="btn secondary" onclick="autoSuggestCell()" style="width:100%;background:linear-gradient(135deg,#E6F7FE,#FFE5F2);border:1px solid var(--ip-cyan);">🪄 Подобрать автоматически</button>
+    </div>
+    <div id="ceSuggestions" style="margin-bottom:10px;"></div>
+    <div id="ceWarning" style="background:#FFF5F5;border:1px solid #FECACA;border-radius:6px;padding:8px;font-size:11px;color:#B91C1C;margin-bottom:10px;display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="clearCell()" style="color:var(--text-muted);">Очистить ячейку</button>
+      <button class="btn secondary" onclick="revertCell()" id="ceRevertBtn">↺ Откатить к оригиналу</button>
+      <button class="btn" onclick="saveCellEdit()">Сохранить</button>
+    </div>
+    <div id="ceError" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Admin Edit User Modal -->
+<div class="modal-bg" id="adminUserModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 id="adminUserTitle" style="margin:0;">Сотрудник</h3>
+      <button class="link-btn" onclick="document.getElementById('adminUserModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row"><label>ФИО</label><input id="auName" type="text"></div>
+    <div class="modal-row"><label>Логин</label><input id="auEmail" type="text" placeholder="например: ivanova-ie" autocapitalize="off" autocorrect="off"></div>
+    <div class="modal-row"><label>Роль</label>
+      <select id="auRole">
+        <option value="teacher">Учитель</option>
+        <option value="head">Руководитель (с правами редактирования)</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Должность (как отображается)</label>
+      <input id="auTitle" type="text" placeholder="например: Руководитель отделения / Администратор / Учитель / Куратор" list="titlesList">
+      <datalist id="titlesList">
+        <option value="Директор школы">
+        <option value="Руководитель отделения">
+        <option value="Администратор отделения">
+        <option value="Координатор">
+        <option value="Учитель">
+        <option value="Классный руководитель">
+        <option value="Психолог">
+      </datalist>
+    </div>
+    <div class="modal-row"><label>Отделения (через запятую)</label><input id="auDepts" type="text" placeholder="Империал, Пушкина"></div>
+    <div class="modal-row"><label>Предметы (через запятую)</label><input id="auSubjects" type="text"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="resetUserPassword()" id="auResetBtn">Сбросить пароль</button>
+      <button class="btn secondary" onclick="deleteUser()" id="auDelBtn" style="color:var(--ip-magenta);border-color:var(--ip-magenta);">Удалить</button>
+      <button class="btn" onclick="saveUser()">Сохранить</button>
+    </div>
+    <div id="auError" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Absence Modal -->
+<div class="modal-bg" id="absenceModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Добавить отсутствие</h3>
+      <button class="link-btn" onclick="document.getElementById('absenceModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row"><label>Сотрудник</label><select id="absUser"></select></div>
+    <div class="modal-row"><label>С даты</label><input type="date" id="absStart"></div>
+    <div class="modal-row"><label>По дату (включительно, если один день — повторите)</label><input type="date" id="absEnd"></div>
+    <div class="modal-row"><label>Тип</label>
+      <select id="absKind">
+        <option value="vacation">🏖 Отпуск</option>
+        <option value="sick">🤒 Больничный</option>
+        <option value="personal">📌 За свой счёт</option>
+        <option value="other">Прочее</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Комментарий (необязательно)</label><input type="text" id="absNote" placeholder="например: семейные обстоятельства"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('absenceModal').classList.remove('show')">Отмена</button>
+      <button class="btn" onclick="saveAbsence()">Сохранить</button>
+    </div>
+    <div id="absErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Academic Support Modal -->
+<div class="modal-bg" id="acsupModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Новое занятие академ. поддержки</h3>
+      <button class="link-btn" onclick="document.getElementById('acsupModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row"><label>Отделение</label><select id="asDept"></select></div>
+    <div class="modal-row"><label>Дата</label><input type="date" id="asDate"></div>
+    <div class="modal-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label>Время начала</label><input type="time" id="asStart"></div>
+      <div style="flex:1;"><label>Время окончания</label><input type="time" id="asEnd"></div>
+    </div>
+    <div class="modal-row"><label>Предмет</label><input type="text" id="asSubject" placeholder="например: Математика"></div>
+    <div class="modal-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label>Класс</label><input type="text" id="asCls" placeholder="5"></div>
+      <div style="flex:1;"><label>Кабинет</label><input type="text" id="asRoom" placeholder="313"></div>
+    </div>
+    <div class="modal-row"><label>Комментарий</label><input type="text" id="asNote" placeholder="тема занятия, что приходить"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('acsupModal').classList.remove('show')">Отмена</button>
+      <button class="btn" onclick="saveAcsup()">Создать</button>
+    </div>
+    <div id="asErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Invite curator modal -->
+<div class="modal-bg" id="inviteModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Пригласить ученика(ов)</h3>
+      <button class="link-btn" onclick="document.getElementById('inviteModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <input type="hidden" id="inviteSessionId">
+    <div class="modal-row"><label>Информация об ученике (ФИО, класс, что обсудить)</label><input type="text" id="inviteStudent" placeholder="например: Петров Иван, 5А класс"></div>
+    <div class="modal-row">
+      <label>Кому отправить уведомление (куратор класса / учитель)</label>
+      <div id="inviteCurators" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:8px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('inviteModal').classList.remove('show')">Отмена</button>
+      <button class="btn" onclick="sendInvite()">Отправить уведомление</button>
+    </div>
+    <div id="inviteErr" class="login-error"></div>
   </div>
 </div>
 

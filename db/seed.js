@@ -7,7 +7,7 @@ const fs = require("fs");
 const bcrypt = require("bcryptjs");
 const db = require("./index");
 
-const DEPTS = ["Империал", "Пушкина", "Чкалова"];
+const DEPTS = ["Империал", "Пушкина", "Чкалова", "Кирова"];
 
 const TRANSLIT = {
   "А":"A","Б":"B","В":"V","Г":"G","Д":"D","Е":"E","Ё":"E","Ж":"Zh","З":"Z","И":"I","Й":"Y","К":"K","Л":"L","М":"M","Н":"N",
@@ -24,13 +24,19 @@ function translit(s) {
 }
 
 function emailFromName(name) {
+  // Generates a short login like "arinina-ep" (surname + initials, no @domain)
   const parts = name.trim().split(/\s+/);
   const surname = translit(parts[0] || "").toLowerCase().replace(/[^a-z]/g, "");
   let init = "";
   if (parts.length > 1) {
-    init = translit(parts[1]).toLowerCase().replace(/[^a-z]/g, "").slice(0, 2);
+    // Collect first letters of remaining parts
+    for (let i = 1; i < parts.length; i++) {
+      const tr = translit(parts[i]).toLowerCase().replace(/[^a-z]/g, "");
+      if (tr.length > 0) init += tr[0];
+    }
+    init = init.slice(0, 2);
   }
-  return surname + (init ? "." + init : "") + "@intellekt-plus.ru";
+  return surname + (init ? "-" + init : "");
 }
 
 function buildTeacherIndex(scheduleData) {
@@ -72,10 +78,12 @@ async function main() {
   const hash = await bcrypt.hash(defaultPwd, 10);
 
   // 3 heads
+  // Backup admin accounts (kept for emergencies)
   const heads = [
-    { email: "admin.imperial@intellekt-plus.ru", name: "Завуч Империал", dept: "Империал" },
-    { email: "admin.pushkina@intellekt-plus.ru", name: "Завуч Пушкина", dept: "Пушкина" },
-    { email: "admin.chkalova@intellekt-plus.ru", name: "Завуч Чкалова", dept: "Чкалова" },
+    { email: "admin-imperial", name: "Завуч Империал", dept: "Империал", depts: ["Империал"] },
+    { email: "admin-pushkina", name: "Завуч Пушкина", dept: "Пушкина", depts: ["Пушкина"] },
+    { email: "admin-chkalova", name: "Завуч Чкалова", dept: "Чкалова", depts: ["Чкалова"] },
+    { email: "admin-kirova",   name: "Завуч Кирова",   dept: "Кирова",   depts: ["Кирова"] },
   ];
 
   let createdHeads = 0;
@@ -85,7 +93,7 @@ async function main() {
        VALUES ($1, $2, 'head', $3, $4, $5, TRUE)
        ON CONFLICT (email) DO NOTHING
        RETURNING id`,
-      [h.email, h.name, h.dept, [h.dept], hash]
+      [h.email, h.name, h.dept, h.depts, hash]
     );
     if (r.rowCount > 0) createdHeads++;
   }
@@ -103,7 +111,7 @@ async function main() {
     let email = emailFromName(name);
     let suffix = 1;
     while (usedEmails.has(email)) {
-      email = emailFromName(name).replace("@", suffix + "@");
+      email = emailFromName(name) + suffix;
       suffix++;
     }
     usedEmails.add(email);
@@ -117,10 +125,46 @@ async function main() {
     if (r.rowCount > 0) createdTeachers++;
   }
 
+  // ===== SPECIAL HEADS: real руководители =====
+  // These take priority — if they already exist as teachers, we upgrade them to head.
+  const SPECIAL_HEADS = [
+    { name: "Шестакова И.А.", login: "shestakova-ia",  depts: ["Империал"], dept: "Империал", title: "Руководитель отделения", upgradeOnly: true },
+    { name: "Клюева Е.С.",     login: "klueva-es",      depts: ["Чкалова"],  dept: "Чкалова",  title: "Руководитель отделения", upgradeOnly: true },
+    { name: "Шатунова В.А.",   login: "shatunova-va",   depts: ["Пушкина"],  dept: "Пушкина",  title: "Руководитель отделения" },
+    { name: "Муратова В.Д.",   login: "muratova-vd",    depts: ["Кирова"],   dept: "Кирова",   title: "Администратор отделения" },
+    { name: "Шаболкина Л.А.",  login: "shabolkina-la",  depts: ["Кирова"],    dept: "Кирова",   title: "Руководитель отделения" },
+    { name: "Киняева У.В.",    login: "kinyaeva-uv",    depts: DEPTS.slice(), dept: "Империал", title: "Директор школы", director: true },
+  ];
+
+  let specialCreated = 0, specialUpgraded = 0;
+  for (const sh of SPECIAL_HEADS) {
+    const existing = await db.query("SELECT id FROM users WHERE name = $1 LIMIT 1", [sh.name]);
+    if (existing.rows.length > 0) {
+      await db.query(
+        "UPDATE users SET role='head', dept=$1, depts=$2, title=$3 WHERE id=$4",
+        [sh.dept, sh.depts, sh.title || null, existing.rows[0].id]
+      );
+      specialUpgraded++;
+    } else {
+      let login = sh.login;
+      let suffix = 1;
+      while ((await db.query("SELECT 1 FROM users WHERE email = $1", [login])).rowCount > 0) {
+        login = sh.login + suffix++;
+      }
+      await db.query(
+        `INSERT INTO users (email, name, role, title, dept, depts, password_hash, must_change)
+         VALUES ($1, $2, 'head', $3, $4, $5, $6, TRUE)`,
+        [login, sh.name, sh.title || null, sh.dept, sh.depts, hash]
+      );
+      specialCreated++;
+    }
+  }
+
   const totalUsers = await db.query("SELECT COUNT(*) FROM users");
   console.log(`Seed complete:
-  +${createdHeads} heads (new)
-  +${createdTeachers} teachers (new)
+  +${createdHeads} backup admin heads
+  +${createdTeachers} teachers
+  +${specialCreated} new руководители, ${specialUpgraded} upgraded to head
   total users in DB: ${totalUsers.rows[0].count}
   default password: ${defaultPwd} (must change on first login)`);
 

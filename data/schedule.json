@@ -68,8 +68,8 @@
               "room": null
             },
             "2": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "3": {
@@ -211,8 +211,8 @@
               "room": null
             },
             "3": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "4": {
@@ -237,7 +237,6 @@
             },
             "8": {
               "subject": "Физика/Английский/",
-              "teacher": "Обществознание/Химия",
               "room": "312/314"
             }
           }
@@ -247,8 +246,8 @@
           "time": "13.15-13.55",
           "classes": {
             "1": {
-              "subject": "Английский язык  Добрякова",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Добрякова",
               "room": null
             },
             "2": {
@@ -344,8 +343,8 @@
               "room": null
             },
             "2": {
-              "subject": "Я учусь                         Мурзина В.Д.",
-              "teacher": null,
+              "subject": "Я учусь",
+              "teacher": "Мурзина В.Д.",
               "room": null
             },
             "3": {
@@ -359,8 +358,8 @@
               "room": null
             },
             "5": {
-              "subject": "Практикум                         Руденко А.Е.",
-              "teacher": null,
+              "subject": "Практикум",
+              "teacher": "Руденко А.Е.",
               "room": "спортзал"
             },
             "6": {
@@ -439,8 +438,8 @@
           "time": "9.00-9.40",
           "classes": {
             "1": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -459,8 +458,8 @@
               "room": null
             },
             "5": {
-              "subject": "Биология                                Марников А.В.",
-              "teacher": null,
+              "subject": "Биология",
+              "teacher": "Марников А.В.",
               "room": "307"
             },
             "6": {
@@ -495,8 +494,8 @@
               "room": null
             },
             "3": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "4": {
@@ -536,13 +535,13 @@
               "room": null
             },
             "2": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "3": {
-              "subject": "Английский язык Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": null
             },
             "4": {
@@ -577,8 +576,8 @@
           "time": "11.30-12.10",
           "classes": {
             "1": {
-              "subject": "Письмо Бородина Л.В.",
-              "teacher": null,
+              "subject": "Письмо",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -649,7 +648,7 @@
             },
             "6": {
               "subject": "Английский язык",
-              "teacher": "Григорак Д.В. Руденко А.Е.",
+              "teacher": "Григорак Д.В.",
               "room": "307/314"
             },
             "7": {
@@ -684,8 +683,8 @@
               "room": null
             },
             "4": {
-              "subject": "Музыка Спиридонова Е.В.",
-              "teacher": null,
+              "subject": "Музыка",
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "5": {
@@ -695,7 +694,7 @@
             },
             "6": {
               "subject": "Английский язык",
-              "teacher": "Григорак Д.В. Руденко А.Е.",
+              "teacher": "Григорак Д.В.",
               "room": "307/314"
             },
             "7": {
@@ -715,13 +714,13 @@
           "time": "14.10-14.50",
           "classes": {
             "1": {
-              "subject": "Музыка Спиридонова Е.В.",
-              "teacher": null,
+              "subject": "Музыка",
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "2": {
-              "subject": "Фунциональная грамотность Мурзина",
-              "teacher": null,
+              "subject": "Фунциональная грамотность",
+              "teacher": "Мурзина В.Д.",
               "room": null
             },
             "3": {
@@ -735,8 +734,8 @@
               "room": null
             },
             "5": {
-              "subject": "Английский язык  Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": "307"
             },
             "6": {
@@ -781,8 +780,8 @@
               "room": null
             },
             "5": {
-              "subject": "Английский язык  Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": "307"
             },
             "6": {
@@ -876,8 +875,8 @@
               "room": null
             },
             "3": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "4": {
@@ -886,8 +885,8 @@
               "room": null
             },
             "5": {
-              "subject": "Английский язык  Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": "307"
             },
             "6": {
@@ -932,8 +931,8 @@
               "room": null
             },
             "5": {
-              "subject": "Английский язык  Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": "307"
             },
             "6": {
@@ -958,8 +957,8 @@
           "time": "10.40-11.20",
           "classes": {
             "1": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -984,7 +983,7 @@
             },
             "6": {
               "subject": "Английский язык",
-              "teacher": "Григорак Д.В. Руденко А.Е.",
+              "teacher": "Григорак Д.В.",
               "room": "308/307"
             },
             "7": {
@@ -994,7 +993,7 @@
             },
             "8": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             }
           }
@@ -1004,8 +1003,8 @@
           "time": "11.30-12.10",
           "classes": {
             "1": {
-              "subject": "Письмо Бородина Л.В.",
-              "teacher": null,
+              "subject": "Письмо",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -1030,7 +1029,7 @@
             },
             "6": {
               "subject": "Английский язык",
-              "teacher": "Григорак Д.В. Руденко А.Е.",
+              "teacher": "Григорак Д.В.",
               "room": "308/307"
             },
             "7": {
@@ -1040,7 +1039,7 @@
             },
             "8": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             }
           }
@@ -1055,13 +1054,13 @@
               "room": null
             },
             "2": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "3": {
-              "subject": "Английский язык Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": null
             },
             "4": {
@@ -1070,13 +1069,13 @@
               "room": null
             },
             "5": {
-              "subject": "ИЗО/ТРУД                        Люлякина ЕВ/Гладышев АВ",
-              "teacher": null,
+              "subject": "ИЗО/ТРУД Люлякина ЕВ/",
+              "teacher": "Гладышев А.В.",
               "room": "308/307"
             },
             "6": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "7": {
@@ -1101,13 +1100,13 @@
               "room": null
             },
             "2": {
-              "subject": "Литерат. Чтение Мурзина В.Д.",
-              "teacher": null,
+              "subject": "Литерат",
+              "teacher": "Мурзина В.Д.",
               "room": null
             },
             "3": {
-              "subject": "Английский язык Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": null
             },
             "4": {
@@ -1116,13 +1115,13 @@
               "room": null
             },
             "5": {
-              "subject": "ИЗО/ТРУД                        Люлякина ЕВ/Гладышев АВ",
-              "teacher": null,
+              "subject": "ИЗО/ТРУД Люлякина ЕВ/",
+              "teacher": "Гладышев А.В.",
               "room": "308/307"
             },
             "6": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "7": {
@@ -1168,7 +1167,7 @@
             },
             "6": {
               "subject": "ИЗО/ТРУД",
-              "teacher": "Люлякина ЕВ/Гладышев АВ",
+              "teacher": "Люлякина Е.В.",
               "room": "312"
             },
             "7": {
@@ -1298,8 +1297,8 @@
               "room": null
             },
             "2": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "3": {
@@ -1319,7 +1318,7 @@
             },
             "6": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "7": {
@@ -1339,8 +1338,8 @@
           "time": "9.50-10.30",
           "classes": {
             "1": {
-              "subject": "Письмо Бородина Л.В.",
-              "teacher": null,
+              "subject": "Письмо",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -1365,7 +1364,7 @@
             },
             "6": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "7": {
@@ -1386,7 +1385,6 @@
           "classes": {
             "1": {
               "subject": "Физическая",
-              "teacher": "культура",
               "room": null
             },
             "2": {
@@ -1395,8 +1393,8 @@
               "room": null
             },
             "3": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "4": {
@@ -1406,7 +1404,7 @@
             },
             "5": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "6": {
@@ -1431,8 +1429,8 @@
           "time": "11.30-12.10",
           "classes": {
             "1": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -1452,7 +1450,7 @@
             },
             "5": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "6": {
@@ -1487,8 +1485,8 @@
               "room": null
             },
             "3": {
-              "subject": "Английский язык Руденко",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": null
             },
             "4": {
@@ -1502,8 +1500,8 @@
               "room": "309"
             },
             "6": {
-              "subject": "Естествознание  Туркина ГЮ",
-              "teacher": null,
+              "subject": "Естествознание",
+              "teacher": "Туркина Г.Ю.",
               "room": "315"
             },
             "7": {
@@ -1543,8 +1541,8 @@
               "room": null
             },
             "5": {
-              "subject": "Естествознание  Туркина ГЮ",
-              "teacher": null,
+              "subject": "Естествознание",
+              "teacher": "Туркина Г.Ю.",
               "room": "315"
             },
             "6": {
@@ -1605,7 +1603,6 @@
             },
             "8": {
               "subject": "Информатика/",
-              "teacher": "Обществознание",
               "room": "327/308"
             }
           }
@@ -1651,7 +1648,6 @@
             },
             "8": {
               "subject": "Информатика/",
-              "teacher": "Обществознание",
               "room": "327/308"
             }
           }
@@ -1766,23 +1762,23 @@
               "room": null
             },
             "2": {
-              "subject": "Литерат. Чтение Мурзина В.Д.",
-              "teacher": null,
+              "subject": "Литерат",
+              "teacher": "Мурзина В.Д.",
               "room": null
             },
             "3": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "4": {
-              "subject": "История Самарского края Люлякина Е.В.",
-              "teacher": null,
+              "subject": "История Самарского края",
+              "teacher": "Люлякина Е.В.",
               "room": null
             },
             "5": {
-              "subject": "Английский язык  Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": "307"
             },
             "6": {
@@ -1797,7 +1793,7 @@
             },
             "8": {
               "subject": "Химия В.О.",
-              "teacher": "Горбунова",
+              "teacher": "Горбунова В.О.",
               "room": "315"
             }
           }
@@ -1812,8 +1808,8 @@
               "room": null
             },
             "2": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "3": {
@@ -1827,13 +1823,13 @@
               "room": null
             },
             "5": {
-              "subject": "Английский язык  Руденко А.Е.",
-              "teacher": null,
+              "subject": "Английский язык",
+              "teacher": "Руденко А.Е.",
               "room": "307"
             },
             "6": {
               "subject": "Экспериментаниум",
-              "teacher": "Киняев С. С.",
+              "teacher": "Киняев С.С.",
               "room": "327"
             },
             "7": {
@@ -1843,7 +1839,7 @@
             },
             "8": {
               "subject": "Химия В.О.",
-              "teacher": "Горбунова",
+              "teacher": "Горбунова В.О.",
               "room": "315"
             }
           }
@@ -1853,8 +1849,8 @@
           "time": "11.30-12.10",
           "classes": {
             "1": {
-              "subject": "Письмо Бородина Л.В.",
-              "teacher": null,
+              "subject": "Письмо",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -1868,18 +1864,18 @@
               "room": null
             },
             "4": {
-              "subject": "Функциональная грамотность Мурзина В.Д.",
-              "teacher": null,
+              "subject": "Функциональная грамотность",
+              "teacher": "Мурзина В.Д.",
               "room": null
             },
             "5": {
               "subject": "Экспериментаниум",
-              "teacher": "Киняев С. С.",
+              "teacher": "Киняев С.С.",
               "room": "327"
             },
             "6": {
               "subject": "Английский язык",
-              "teacher": "Григорак Д.В. Руденко А.Е.",
+              "teacher": "Григорак Д.В.",
               "room": "307/314"
             },
             "7": {
@@ -1889,7 +1885,7 @@
             },
             "8": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             }
           }
@@ -1899,8 +1895,8 @@
           "time": "12.20-13.00",
           "classes": {
             "1": {
-              "subject": "Математика Бородина Л.В.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -1925,7 +1921,7 @@
             },
             "6": {
               "subject": "Английский язык",
-              "teacher": "Григорак Д.В. Руденко А.Е.",
+              "teacher": "Григорак Д.В.",
               "room": "307/314"
             },
             "7": {
@@ -1935,7 +1931,7 @@
             },
             "8": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             }
           }
@@ -1971,7 +1967,7 @@
             },
             "6": {
               "subject": "Русский язык",
-              "teacher": "Аринина  Е.П.",
+              "teacher": "Аринина Е.П.",
               "room": "312"
             },
             "7": {
@@ -1991,8 +1987,8 @@
           "time": "14.10-14.50",
           "classes": {
             "1": {
-              "subject": "Функциональная грамотность Бородина",
-              "teacher": null,
+              "subject": "Функциональная грамотность",
+              "teacher": "Бородина Л.В.",
               "room": null
             },
             "2": {
@@ -2001,8 +1997,8 @@
               "room": null
             },
             "3": {
-              "subject": "Функц.грамотность Люлякина Е.В.",
-              "teacher": null,
+              "subject": "Функц.грамотность",
+              "teacher": "Люлякина Е.В.",
               "room": null
             },
             "4": {
@@ -2122,22 +2118,22 @@
           "classes": {
             "1": {
               "subject": "Разговоры о важном",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Разговоры о важном",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Разговоры о важном",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Разговоры о важном",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2148,22 +2144,22 @@
           "classes": {
             "1": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2174,22 +2170,22 @@
           "classes": {
             "1": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Добрякова Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "4": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             }
           }
@@ -2200,22 +2196,22 @@
           "classes": {
             "1": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "3": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "4": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2226,22 +2222,22 @@
           "classes": {
             "1": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "3": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -2252,22 +2248,22 @@
           "classes": {
             "1": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Шатунова В.А.",
               "room": null
             },
             "3": {
               "subject": "Функциональная грамотность",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -2278,22 +2274,22 @@
           "classes": {
             "1": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Функциональная грамотность",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2304,22 +2300,22 @@
           "classes": {
             "1": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2330,22 +2326,22 @@
           "classes": {
             "1": {
               "subject": "Театр",
-              "teacher": null,
+              "teacher": "Каррамова Т.А.",
               "room": null
             },
             "2": {
               "subject": "Вокал",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "3": {
               "subject": "STEM",
-              "teacher": null,
+              "teacher": "Киняев С.С.",
               "room": null
             },
             "4": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2356,22 +2352,22 @@
           "classes": {
             "1": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "STEM",
-              "teacher": null,
+              "teacher": "Киняев С.С.",
               "room": null
             },
             "3": {
               "subject": "Вокал",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "4": {
               "subject": "Вокал",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             }
           }
@@ -2382,22 +2378,22 @@
           "classes": {
             "1": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -2408,22 +2404,22 @@
           "classes": {
             "1": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -2436,22 +2432,22 @@
           "classes": {
             "1": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "4": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -2462,22 +2458,22 @@
           "classes": {
             "1": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "3": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             }
           }
@@ -2488,22 +2484,22 @@
           "classes": {
             "1": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "ИЗО",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "3": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "4": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             }
           }
@@ -2514,22 +2510,22 @@
           "classes": {
             "1": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Добрякова Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Технология",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "3": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "4": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             }
           }
@@ -2540,22 +2536,22 @@
           "classes": {
             "1": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "3": {
               "subject": "ИЗО",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "4": {
               "subject": "Внеклассное чтение",
-              "teacher": null,
+              "teacher": "Шатунова В.А.",
               "room": null
             }
           }
@@ -2566,22 +2562,22 @@
           "classes": {
             "1": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Добрякова Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "3": {
               "subject": "Технология",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "4": {
               "subject": "История Самарского края",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2592,22 +2588,22 @@
           "classes": {
             "1": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2618,22 +2614,22 @@
           "classes": {
             "1": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Театр",
-              "teacher": null,
+              "teacher": "Каррамова Т.А.",
               "room": null
             },
             "4": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2644,22 +2640,22 @@
           "classes": {
             "1": {
               "subject": "Познай себя",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "2": {
               "subject": "Хореография",
-              "teacher": null,
+              "teacher": "Панасик А.Н.",
               "room": null
             },
             "3": {
-              "subject": "Прогулка (воспитатель)",
-              "teacher": null,
+              "subject": "Прогулка",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Юный художник",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             }
           }
@@ -2670,22 +2666,22 @@
           "classes": {
             "1": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Юный художник",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "3": {
               "subject": "Кейс",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Кейс",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -2696,22 +2692,22 @@
           "classes": {
             "1": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -2722,22 +2718,22 @@
           "classes": {
             "1": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -2750,22 +2746,22 @@
           "classes": {
             "1": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "3": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "4": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2776,22 +2772,22 @@
           "classes": {
             "1": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "3": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "4": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             }
           }
@@ -2802,22 +2798,22 @@
           "classes": {
             "1": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Добрякова Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Музыка",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             }
           }
@@ -2828,22 +2824,22 @@
           "classes": {
             "1": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Музыка",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "3": {
               "subject": "Внеклассное чтение",
-              "teacher": null,
+              "teacher": "Шатунова В.А.",
               "room": null
             },
             "4": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             }
           }
@@ -2854,22 +2850,22 @@
           "classes": {
             "1": {
               "subject": "Музыка",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "2": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "3": {
-              "subject": "Практикум по англ яз",
-              "teacher": null,
+              "subject": "Практикум по англ языку",
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "4": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -2880,22 +2876,22 @@
           "classes": {
             "1": {
               "subject": "Функциональная грамотность",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Функциональная грамотность",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Музыка",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "4": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2906,22 +2902,22 @@
           "classes": {
             "1": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
-              "subject": "Прогулка (воспитатель)",
-              "teacher": null,
+              "subject": "Прогулка",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -2932,22 +2928,22 @@
           "classes": {
             "1": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Театр",
-              "teacher": null,
+              "teacher": "Каррамова Т.А.",
               "room": null
             }
           }
@@ -2958,22 +2954,22 @@
           "classes": {
             "1": {
               "subject": "Вокал",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "2": {
               "subject": "Театр",
-              "teacher": null,
+              "teacher": "Каррамова Т.А.",
               "room": null
             },
             "3": {
               "subject": "Хореография",
-              "teacher": null,
+              "teacher": "Панасик А.Н.",
               "room": null
             },
             "4": {
-              "subject": "Прогулка (воспитатель)",
-              "teacher": null,
+              "subject": "Прогулка",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -2984,22 +2980,22 @@
           "classes": {
             "1": {
               "subject": "Хореография",
-              "teacher": null,
+              "teacher": "Панасик А.Н.",
               "room": null
             },
             "2": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Вокал",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             },
             "4": {
               "subject": "Вокал",
-              "teacher": null,
+              "teacher": "Спиридонова Е.В.",
               "room": null
             }
           }
@@ -3010,22 +3006,22 @@
           "classes": {
             "1": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3036,22 +3032,22 @@
           "classes": {
             "1": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3064,22 +3060,22 @@
           "classes": {
             "1": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "3": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Люлякина Е.В.",
               "room": null
             },
             "4": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -3090,22 +3086,22 @@
           "classes": {
             "1": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Добрякова Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "3": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Люлякина Е.В.",
               "room": null
             },
             "4": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -3116,22 +3112,22 @@
           "classes": {
             "1": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "3": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "4": {
               "subject": "Технология",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             }
           }
@@ -3142,22 +3138,22 @@
           "classes": {
             "1": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "4": {
               "subject": "ИЗО",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             }
           }
@@ -3168,22 +3164,22 @@
           "classes": {
             "1": {
               "subject": "ИЗО",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "3": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             }
           }
@@ -3194,22 +3190,22 @@
           "classes": {
             "1": {
               "subject": "Технология",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Шатунова В.А.",
               "room": null
             },
             "3": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "4": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             }
           }
@@ -3220,22 +3216,22 @@
           "classes": {
             "1": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -3246,22 +3242,22 @@
           "classes": {
             "1": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Учусь учиться",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -3272,22 +3268,22 @@
           "classes": {
             "1": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Добрякова Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Кейс",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "3": {
               "subject": "Юный художник",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "4": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3298,22 +3294,22 @@
           "classes": {
             "1": {
               "subject": "Юный художник",
-              "teacher": null,
+              "teacher": "Ильницкая Д.Н.",
               "room": null
             },
             "2": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Познай себя",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Познай себя",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -3324,22 +3320,22 @@
           "classes": {
             "1": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3349,23 +3345,23 @@
           "time": "18.00 - 19.00",
           "classes": {
             "1": {
-              "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "subject": "Умный пол",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
-              "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "subject": "Умный пол",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
-              "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "subject": "Умный пол",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
-              "subject": "Занятия по плану воспитателя",
-              "teacher": null,
+              "subject": "Умный пол",
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3378,22 +3374,22 @@
           "classes": {
             "1": {
               "subject": "Внеклассное чтение",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "4": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             }
           }
@@ -3404,22 +3400,22 @@
           "classes": {
             "1": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "3": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Нестандартные задачи",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             }
           }
@@ -3430,22 +3426,22 @@
           "classes": {
             "1": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Русский язык",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "3": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "4": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -3456,22 +3452,22 @@
           "classes": {
             "1": {
               "subject": "Нестандартные задачи",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Математика",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "4": {
               "subject": "Английский язык",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             }
           }
@@ -3482,22 +3478,22 @@
           "classes": {
             "1": {
               "subject": "Окружающий мир",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             },
             "3": {
               "subject": "Литературное чтение",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             },
             "4": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3508,22 +3504,22 @@
           "classes": {
             "1": {
               "subject": "Классный час",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Внеклассное чтение",
-              "teacher": null,
+              "teacher": "Шатунова В.А.",
               "room": null
             },
             "3": {
               "subject": "Физкультура",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Практикум по англ языку",
-              "teacher": null,
+              "teacher": "Тихонова К.Н.",
               "room": null
             }
           }
@@ -3534,22 +3530,22 @@
           "classes": {
             "1": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Малышева С.В.",
               "room": null
             },
             "2": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Классный час",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Классный час",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -3560,22 +3556,22 @@
           "classes": {
             "1": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Классный час",
-              "teacher": null,
+              "teacher": "Голикова А.А.",
               "room": null
             },
             "3": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Львова О.А.",
               "room": null
             },
             "4": {
               "subject": "Прогулка",
-              "teacher": null,
+              "teacher": "Корнеева Е.П.",
               "room": null
             }
           }
@@ -3586,22 +3582,22 @@
           "classes": {
             "1": {
               "subject": "STEM",
-              "teacher": null,
+              "teacher": "Киняев С.С.",
               "room": null
             },
             "2": {
               "subject": "Хореография",
-              "teacher": null,
+              "teacher": "Панасик А.Н.",
               "room": null
             },
             "3": {
               "subject": "Хореография",
-              "teacher": null,
+              "teacher": "Панасик А.Н.",
               "room": null
             },
             "4": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3612,22 +3608,22 @@
           "classes": {
             "1": {
               "subject": "Хореография",
-              "teacher": null,
+              "teacher": "Панасик А.Н.",
               "room": null
             },
             "2": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Игротека",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "STEM",
-              "teacher": null,
+              "teacher": "Киняев С.С.",
               "room": null
             }
           }
@@ -3638,22 +3634,22 @@
           "classes": {
             "1": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "2": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "3": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             },
             "4": {
               "subject": "Умный пол",
-              "teacher": null,
+              "teacher": "Дериглазова Е.А.",
               "room": null
             }
           }
@@ -3705,7 +3701,7 @@
           "classes": {
             "5": {
               "subject": "ИЗО",
-              "teacher": "Федорова Е.В.",
+              "teacher": "Фёдорова Е.В.",
               "room": "6"
             },
             "6": {
@@ -3756,7 +3752,7 @@
           "classes": {
             "5": {
               "subject": "ИЗО",
-              "teacher": "Федорова Е.В.",
+              "teacher": "Фёдорова Е.В.",
               "room": "6"
             },
             "6": {
@@ -3817,7 +3813,7 @@
             },
             "6": {
               "subject": "ИЗО",
-              "teacher": "Федорова Е.В.",
+              "teacher": "Фёдорова Е.В.",
               "room": "6"
             },
             "7": {
@@ -3848,7 +3844,7 @@
             },
             "6": {
               "subject": "ИЗО",
-              "teacher": "Федорова Е.В.",
+              "teacher": "Фёдорова Е.В.",
               "room": "6"
             },
             "7": {
@@ -3884,7 +3880,7 @@
             },
             "7": {
               "subject": "ИЗО",
-              "teacher": "Федорова Е.В.",
+              "teacher": "Фёдорова Е.В.",
               "room": "6"
             },
             "8": {
@@ -3896,15 +3892,15 @@
                 },
                 {
                   "subject": "Английский язык",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "4"
                 }
               ],
               "room": "4"
             },
             "9": {
-              "subject": "Математика  Романькова Т.М.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Романькова Т.М.",
               "room": "1"
             }
           }
@@ -3925,7 +3921,7 @@
             },
             "7": {
               "subject": "ИЗО",
-              "teacher": "Федорова Е.В.",
+              "teacher": "Фёдорова Е.В.",
               "room": "6"
             },
             "8": {
@@ -3937,15 +3933,15 @@
                 },
                 {
                   "subject": "Английский язык",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "4"
                 }
               ],
               "room": "4"
             },
             "9": {
-              "subject": "Математика  Романькова Т.М.",
-              "teacher": null,
+              "subject": "Математика",
+              "teacher": "Романькова Т.М.",
               "room": "1"
             }
           }
@@ -4003,8 +3999,8 @@
             "9": {
               "groups": [
                 {
-                  "subject": "Информатика Левченко О.А.",
-                  "teacher": null,
+                  "subject": "Информатика",
+                  "teacher": "Левченко О.А.",
                   "room": "6"
                 },
                 {
@@ -4146,7 +4142,7 @@
                 },
                 {
                   "subject": "Английский яз. (база)",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "5"
                 }
               ],
@@ -4193,7 +4189,7 @@
                 },
                 {
                   "subject": "Английский яз. (база)",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "5"
                 }
               ],
@@ -5300,7 +5296,7 @@
             },
             "8": {
               "subject": "Предмет по выботу английский язык",
-              "teacher": "Селезнева Ю.С.",
+              "teacher": "Селезнёва Ю.С.",
               "room": "4"
             },
             "9": {
@@ -5532,7 +5528,7 @@
                 },
                 {
                   "subject": "Английский яз. (база)",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "3"
                 }
               ],
@@ -5579,7 +5575,7 @@
                 },
                 {
                   "subject": "Английский яз. (база)",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "3"
                 }
               ],
@@ -5949,7 +5945,7 @@
             },
             "7": {
               "subject": "Самоподготовка по геометрии",
-              "teacher": "Зайчикова Ю.А.",
+              "teacher": "Зайчикова Ю.В.",
               "room": "2"
             },
             "8": {
@@ -5966,7 +5962,7 @@
                 },
                 {
                   "subject": "Обществознание ОГЭ",
-                  "teacher": "Пешкола Л.В.",
+                  "teacher": "Пешкова Л.В.",
                   "room": "3"
                 }
               ],
@@ -6333,7 +6329,7 @@
                 },
                 {
                   "subject": "Английский язык",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "6"
                 }
               ],
@@ -6374,7 +6370,7 @@
                 },
                 {
                   "subject": "Английский язык",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "6"
                 }
               ],
@@ -6382,7 +6378,7 @@
             },
             "9": {
               "subject": "Репетиция дня успеха /Итоги недели",
-              "teacher": "Поливанова М.А. / Еговитина",
+              "teacher": "Поливанова М.А.",
               "room": "4"
             }
           }
@@ -6405,7 +6401,7 @@
                 },
                 {
                   "subject": "Английский язык",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "6"
                 }
               ],
@@ -6425,7 +6421,7 @@
               "groups": [
                 {
                   "subject": "Репетиция дня успеха /Итоги недели",
-                  "teacher": "Поливанова М.А. / Еговитина",
+                  "teacher": "Поливанова М.А.",
                   "room": null
                 },
                 {
@@ -6456,7 +6452,7 @@
                 },
                 {
                   "subject": "Английский язык",
-                  "teacher": "Селезнёва Ю. С.",
+                  "teacher": "Селезнёва Ю.С.",
                   "room": "6"
                 }
               ],
@@ -6476,7 +6472,7 @@
               "groups": [
                 {
                   "subject": "Репетиция дня успеха /Итоги недели",
-                  "teacher": "Поливанова М.А. / Еговитина",
+                  "teacher": "Поливанова М.А.",
                   "room": null
                 },
                 {
@@ -6514,8 +6510,8 @@
               "room": "2"
             },
             "9": {
-              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6 Клюева Е.С.",
-              "teacher": null,
+              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6",
+              "teacher": "Клюева Е.С.",
               "room": null
             }
           }
@@ -6545,8 +6541,8 @@
               "room": "2"
             },
             "9": {
-              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6 Клюева Е.С.",
-              "teacher": null,
+              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6",
+              "teacher": "Клюева Е.С.",
               "room": null
             }
           }
@@ -6571,8 +6567,8 @@
               "room": "2"
             },
             "9": {
-              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6 Клюева Е.С.",
-              "teacher": null,
+              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6",
+              "teacher": "Клюева Е.С.",
               "room": null
             }
           }
@@ -6587,8 +6583,8 @@
               "room": null
             },
             "9": {
-              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6 Клюева Е.С.",
-              "teacher": null,
+              "subject": "Мониторинг(предмет по выбору кабинет 5 Еговитина А.В./ Поливанова М.А. кабинет 6",
+              "teacher": "Клюева Е.С.",
               "room": null
             }
           }
@@ -6844,6 +6840,939 @@
           "time": "15:50- 17:10",
           "classes": {},
           "right_side": true
+        }
+      }
+    }
+  },
+  "Кирова": {
+    "classes": [
+      "1А",
+      "1Б",
+      "1Э",
+      "2А",
+      "2Б",
+      "3А",
+      "3Б",
+      "4А",
+      "4Б",
+      "5А",
+      "5Б",
+      "6А",
+      "6Б",
+      "7А",
+      "7Б",
+      "8А",
+      "8Б",
+      "9А",
+      "9Б",
+      "10",
+      "11"
+    ],
+    "schedule": {
+      "Понедельник": {
+        "L1|9.00-9.40": {
+          "lesson_no": 1,
+          "time": "9.00-9.40",
+          "classes": {
+            "1А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Скакалова Н.Н."
+            },
+            "2А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Подольская Т.В."
+            },
+            "2Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Ковылина Е.Н."
+            },
+            "3А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Архипова Н.Н."
+            },
+            "3Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Веретенникова Т.А."
+            },
+            "4А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Поряева Е.П."
+            },
+            "4Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Житнова Е.В."
+            }
+          }
+        },
+        "L2|9.50-10.30": {
+          "lesson_no": 2,
+          "time": "9.50-10.30",
+          "classes": {
+            "1А": {
+              "subject": "Математика",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Русский язык",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "Русский язык",
+              "teacher": "Скакалова Н.Н."
+            },
+            "2А": {
+              "subject": "Математика",
+              "teacher": "Подольская Т.В."
+            },
+            "2Б": {
+              "subject": "Русский язык",
+              "teacher": "Ковылина Е.Н."
+            },
+            "3А": {
+              "subject": "Русский язык",
+              "teacher": "Архипова Н.Н."
+            },
+            "3Б": {
+              "subject": "Математика",
+              "teacher": "Веретенникова Т.А."
+            },
+            "4А": {
+              "subject": "Русский язык",
+              "teacher": "Поряева Е.П."
+            },
+            "4Б": {
+              "subject": "Математика",
+              "teacher": "Поряева Е.П."
+            }
+          }
+        },
+        "L3|10.40-11.20": {
+          "lesson_no": 3,
+          "time": "10.40-11.20",
+          "classes": {
+            "1А": {
+              "subject": "Русский язык",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Окружающий мир",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "Английский язык",
+              "teacher": "Карпова Н.С."
+            },
+            "2А": {
+              "subject": "Русский язык",
+              "teacher": "Подольская Т.В."
+            },
+            "2Б": {
+              "subject": "Математика",
+              "teacher": "Ковылина Е.Н."
+            },
+            "3А": {
+              "subject": "Математика",
+              "teacher": "Веретенникова Т.Н."
+            },
+            "3Б": {
+              "subject": "Русский язык",
+              "teacher": "Архипова Н.Н."
+            },
+            "4А": {
+              "subject": "Английский язык",
+              "teacher": "Михалкина О.П."
+            },
+            "4Б": {
+              "subject": "Рассказы по истории Самарского края",
+              "teacher": "Кузнецов М.А."
+            }
+          }
+        },
+        "L4|11.30-12.10": {
+          "lesson_no": 4,
+          "time": "11.30-12.10",
+          "classes": {
+            "1А": {
+              "subject": "Английский язык",
+              "teacher": "Карпова Н.С."
+            },
+            "1Б": {
+              "subject": "Математика",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "Математика",
+              "teacher": "Скакалова Н.Н."
+            },
+            "3Б": {
+              "subject": "Литературное чтение",
+              "teacher": "Веретенникова Т.А."
+            },
+            "4А": {
+              "subject": "Рассказы по истории Самарского края",
+              "teacher": "Кузнецов М.А."
+            },
+            "4Б": {
+              "subject": "Английский язык",
+              "teacher": "Михалкина О.П."
+            }
+          }
+        },
+        "L5|12.20-13.00": {
+          "lesson_no": 5,
+          "time": "12.20-13.00",
+          "classes": {
+            "1А": {
+              "subject": "Литературное чтение",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Английский язык",
+              "teacher": "Карпова Н.С."
+            },
+            "1Э": {
+              "subject": "Окружающий мир",
+              "teacher": "Скакалова Н.Н."
+            },
+            "3Б": {
+              "subject": "Физкультура",
+              "teacher": "Кузьмин А.А."
+            },
+            "4А": {
+              "subject": "Математика",
+              "teacher": "Поряева Е.П."
+            },
+            "4Б": {
+              "subject": "Русский язык",
+              "teacher": "Житнова Е.В."
+            }
+          }
+        },
+        "L9|15.40-16.20": {
+          "lesson_no": 9,
+          "time": "15.40-16.20",
+          "classes": {
+            "1А": {
+              "subject": "Шахматы",
+              "teacher": "Антошин Е.А."
+            },
+            "1Б": {
+              "subject": "Ритмика",
+              "teacher": "Старкова Л.П."
+            },
+            "1Э": {
+              "subject": "Практикум по английскому языку",
+              "teacher": "Карпова Н.С."
+            },
+            "3Б": {
+              "subject": "Научный клуб",
+              "teacher": "Еремеева М.Н."
+            }
+          }
+        },
+        "L10|16.30-17.10": {
+          "lesson_no": 10,
+          "time": "16.30-17.10",
+          "classes": {
+            "1А": {
+              "subject": "Ритмика",
+              "teacher": "Старкова Л.П."
+            },
+            "3Б": {
+              "subject": "Актёрское мастерство",
+              "teacher": "Алексушин Н.Г."
+            },
+            "4А": {
+              "subject": "Волейбол",
+              "teacher": "Гладышев Н.А.",
+              "room": "307"
+            }
+          }
+        },
+        "L11|17.20-18.00": {
+          "lesson_no": 11,
+          "time": "17.20-18.00",
+          "classes": {
+            "1Б": {
+              "subject": "Подвижные игры",
+              "teacher": "Кунц К.В."
+            },
+            "2А": {
+              "subject": "Волейбол",
+              "teacher": "Аверин Д.Ю.",
+              "room": "спортзал"
+            }
+          }
+        },
+        "R1|9.00-9.40": {
+          "lesson_no": 1,
+          "time": "9.00-9.40",
+          "classes": {
+            "5А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Белова Г.Е.",
+              "room": "202"
+            },
+            "5Б": {
+              "subject": "Музыка",
+              "teacher": "Шестакова Е.Е.",
+              "room": "405"
+            },
+            "6А": {
+              "subject": "Литература",
+              "teacher": "Маркосян Ш.С.",
+              "room": "407"
+            },
+            "6Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Муратова В.Д.",
+              "room": "206"
+            },
+            "7А": {
+              "subject": "История",
+              "teacher": "Кузнецов М.А.",
+              "room": "408"
+            },
+            "7Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Локатенко Ю.В.",
+              "room": "302"
+            },
+            "8А": {
+              "subject": "Функциональная грамотность",
+              "teacher": "Соколова М.А.",
+              "room": "401"
+            },
+            "8Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Журавлёва Т.Л.",
+              "room": "303"
+            },
+            "9А": {
+              "subject": "Подготовка к ОГЭ (Химия)",
+              "teacher": "Мурзин П.В.",
+              "room": "406"
+            },
+            "9Б": {
+              "subject": "Подготовка к ОГЭ (Физика)",
+              "teacher": "Маркосян Т.А.",
+              "room": "305"
+            },
+            "10": {
+              "subject": "Самоподготовка по русскому языку",
+              "teacher": "Виноградов В.С.",
+              "room": "406"
+            }
+          },
+          "right_side": true
+        },
+        "R2|9.50-10.30": {
+          "lesson_no": 2,
+          "time": "9.50-10.30",
+          "classes": {
+            "5А": {
+              "subject": "Музыка",
+              "teacher": "Шестакова Е.Е.",
+              "room": "405"
+            },
+            "5Б": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Белова Г.Е.",
+              "room": "202"
+            },
+            "6А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Муратова В.Д.",
+              "room": "206"
+            },
+            "6Б": {
+              "subject": "Литература",
+              "teacher": "Маркосян Ш.С.",
+              "room": "407"
+            },
+            "7А": {
+              "subject": "Классный час Разговор о важном",
+              "teacher": "Локатенко Ю.В.",
+              "room": "302"
+            },
+            "7Б": {
+              "subject": "История",
+              "teacher": "Кузнецов М.А.",
+              "room": "408"
+            },
+            "8А": {
+              "subject": "Олимпиадная физика",
+              "teacher": "Маркосян Т.А.",
+              "room": "305"
+            },
+            "8Б": {
+              "subject": "Функциональная грамотность",
+              "teacher": "Соколова М.А.",
+              "room": "401"
+            },
+            "9А": {
+              "subject": "Вероятность и статистика",
+              "teacher": "Туркина О.А.",
+              "room": "201"
+            },
+            "9Б": {
+              "subject": "Литература",
+              "teacher": "Фомичёва Е.Б.",
+              "room": "403"
+            }
+          },
+          "right_side": true
+        },
+        "R3|10.40-11.20": {
+          "lesson_no": 3,
+          "time": "10.40-11.20",
+          "classes": {
+            "5А": {
+              "groups": [
+                {
+                  "subject": "Технология (мальчики)",
+                  "teacher": "Гладышев А.В.",
+                  "room": "402"
+                },
+                {
+                  "subject": "Технология (девочки)",
+                  "teacher": "Краспенко А.В.",
+                  "room": "308"
+                }
+              ],
+              "room": "402/308"
+            },
+            "5Б": {
+              "subject": "Литература",
+              "teacher": "Маркосян Ш.С.",
+              "room": "407"
+            },
+            "6А": {
+              "subject": "Русский язык",
+              "teacher": "Фомичёва Е.Б.",
+              "room": "403"
+            },
+            "6Б": {
+              "subject": "Математика",
+              "teacher": "Муратова В.Д.",
+              "room": "206"
+            },
+            "7А": {
+              "subject": "Литература",
+              "teacher": "Соколова М.А.",
+              "room": "401"
+            },
+            "7Б": {
+              "subject": "Геометрия",
+              "teacher": "Туркина О.А.",
+              "room": "201"
+            },
+            "8А": {
+              "subject": "Информатика",
+              "teacher": "Гладышев Н.А.",
+              "room": "307"
+            },
+            "8Б": {
+              "subject": "Физика",
+              "teacher": "Маркосян Т.А.",
+              "room": "305"
+            },
+            "9А": {
+              "subject": "Биология",
+              "teacher": "Журавлёва Т.Л.",
+              "room": "303"
+            },
+            "9Б": {
+              "subject": "Химия",
+              "teacher": "Мурзин П.В.",
+              "room": "406"
+            },
+            "10": {
+              "subject": "Самоподготовка по русскому языку",
+              "teacher": "Локатенко Ю.В.",
+              "room": "410"
+            },
+            "11": {
+              "subject": "Русский язык (Группа 1)",
+              "teacher": "Шкуратова Т.С.",
+              "room": "409а"
+            }
+          },
+          "right_side": true
+        },
+        "R4|11.30-12.10": {
+          "lesson_no": 4,
+          "time": "11.30-12.10",
+          "classes": {
+            "11": {
+              "subject": "Русский язык (Группа 1)",
+              "teacher": "Шкуратова Т.С.",
+              "room": "409а"
+            },
+            "10": {
+              "subject": "Самоподготовка по русскому языку",
+              "teacher": "Локатенко Ю.В.",
+              "room": "410"
+            }
+          },
+          "right_side": true
+        },
+        "R5|12.20-13.00": {
+          "lesson_no": 5,
+          "time": "12.20-13.00",
+          "classes": {
+            "11": {
+              "subject": "Биология",
+              "teacher": "Васильев Ю.Г.",
+              "room": "302"
+            },
+            "10": {
+              "subject": "Алгебра (Группа базовая)",
+              "teacher": "Белова Г.Е.",
+              "room": "202"
+            }
+          },
+          "right_side": true
+        },
+        "R6|13.15-13.55": {
+          "lesson_no": 6,
+          "time": "13.15-13.55",
+          "classes": {
+            "11": {
+              "subject": "Обществознание",
+              "teacher": "Иванов И.Г.",
+              "room": "408"
+            },
+            "10": {
+              "subject": "Алгебра (Группа базовая)",
+              "teacher": "Белова Г.Е.",
+              "room": "202"
+            }
+          },
+          "right_side": true
+        }
+      },
+      "Вторник": {
+        "L8|14.50-15.30": {
+          "lesson_no": 8,
+          "time": "14.50-15.30",
+          "classes": {
+            "1А": {
+              "subject": "Учись учиться",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Учись учиться",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "Учись учиться",
+              "teacher": "Скакалова Н.Н."
+            }
+          }
+        },
+        "L9|15.40-16.20": {
+          "lesson_no": 9,
+          "time": "15.40-16.20",
+          "classes": {
+            "1А": {
+              "subject": "Внеклассное чтение",
+              "teacher": "Кунц К.В."
+            },
+            "1Б": {
+              "subject": "Музыка",
+              "teacher": "Шестакова Е.Е."
+            },
+            "1Э": {
+              "subject": "Практикум по английскому языку",
+              "teacher": "Карпова Н.С."
+            }
+          }
+        },
+        "L10|16.30-17.10": {
+          "lesson_no": 10,
+          "time": "16.30-17.10",
+          "classes": {
+            "1А": {
+              "subject": "Музыка",
+              "teacher": "Шестакова Е.Е."
+            },
+            "1Б": {
+              "subject": "Внеклассное чтение",
+              "teacher": "Кунц К.В."
+            },
+            "1Э": {
+              "subject": "Музыка",
+              "teacher": "Шестакова Е.Е."
+            }
+          }
+        },
+        "L11|17.20-18.00": {
+          "lesson_no": 11,
+          "time": "17.20-18.00",
+          "classes": {
+            "1А": {
+              "subject": "Ритмика",
+              "teacher": "Старкова Л.П."
+            },
+            "1Б": {
+              "subject": "Ритмика",
+              "teacher": "Старкова Л.П."
+            },
+            "1Э": {
+              "subject": "Ритмика",
+              "teacher": "Старкова Л.П."
+            }
+          }
+        },
+        "R1|9.00-9.40": {
+          "lesson_no": 1,
+          "time": "9.00-9.40",
+          "classes": {
+            "9А": {
+              "subject": "Литература",
+              "teacher": "Фомичёва Е.Б.",
+              "room": "403"
+            },
+            "9Б": {
+              "subject": "Биология",
+              "teacher": "Журавлёва Т.Л.",
+              "room": "303"
+            },
+            "10": {
+              "subject": "Алгебра (профиль)",
+              "teacher": "Туркина О.А.",
+              "room": "201"
+            },
+            "11": {
+              "subject": "Алгебра (база)",
+              "teacher": "Белова Г.Е.",
+              "room": "202"
+            }
+          },
+          "right_side": true
+        },
+        "R2|9.50-10.30": {
+          "lesson_no": 2,
+          "time": "9.50-10.30",
+          "classes": {
+            "9А": {
+              "subject": "Биология",
+              "teacher": "Журавлёва Т.Л.",
+              "room": "303"
+            },
+            "9Б": {
+              "subject": "Литература",
+              "teacher": "Фомичёва Е.Б.",
+              "room": "403"
+            },
+            "10": {
+              "subject": "Литература",
+              "teacher": "Соколова М.А.",
+              "room": "401"
+            },
+            "11": {
+              "subject": "Литература",
+              "teacher": "Фомичёва Е.Б.",
+              "room": "403"
+            }
+          },
+          "right_side": true
+        },
+        "R3|10.40-11.20": {
+          "lesson_no": 3,
+          "time": "10.40-11.20",
+          "classes": {
+            "5А": {
+              "subject": "Английский язык",
+              "teacher": "Артемова А.А.",
+              "room": "405"
+            },
+            "5Б": {
+              "subject": "Английский язык",
+              "teacher": "Михалкина О.П.",
+              "room": "407"
+            },
+            "11": {
+              "subject": "Английский язык",
+              "teacher": "Краснёнко А.В.",
+              "room": "402"
+            }
+          },
+          "right_side": true
+        },
+        "R5|12.20-13.00": {
+          "lesson_no": 5,
+          "time": "12.20-13.00",
+          "classes": {
+            "11": {
+              "subject": "История",
+              "teacher": "Ивлиев И.Г.",
+              "room": "408"
+            }
+          },
+          "right_side": true
+        }
+      },
+      "Среда": {
+        "R1|9.00-9.40": {
+          "lesson_no": 1,
+          "time": "9.00-9.40",
+          "classes": {
+            "5А": {
+              "subject": "Физкультура",
+              "teacher": "Кузьмин А.А.",
+              "room": "спортзал"
+            },
+            "5Б": {
+              "subject": "Физкультура",
+              "teacher": "Кузьмин А.А.",
+              "room": "спортзал"
+            }
+          },
+          "right_side": true
+        },
+        "R2|9.50-10.30": {
+          "lesson_no": 2,
+          "time": "9.50-10.30",
+          "classes": {
+            "6А": {
+              "subject": "ИЗО",
+              "teacher": "Фёдорова Е.В.",
+              "room": "308"
+            },
+            "6Б": {
+              "subject": "Физкультура",
+              "teacher": "Кузьмин А.А.",
+              "room": "спортзал"
+            }
+          },
+          "right_side": true
+        },
+        "R6|13.15-13.55": {
+          "lesson_no": 6,
+          "time": "13.15-13.55",
+          "classes": {
+            "11": {
+              "subject": "Геометрия",
+              "teacher": "Туркина О.А.",
+              "room": "201"
+            }
+          },
+          "right_side": true
+        }
+      },
+      "Четверг": {},
+      "Пятница": {
+        "L1|9.00-9.40": {
+          "lesson_no": 1,
+          "time": "9.00-9.40",
+          "classes": {
+            "1А": {
+              "subject": "Математика",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "ИЗО/Творчество",
+              "teacher": "Фёдорова Е.В."
+            },
+            "1Э": {
+              "subject": "Русский язык",
+              "teacher": "Скакалова Н.Н."
+            }
+          }
+        },
+        "L2|9.50-10.30": {
+          "lesson_no": 2,
+          "time": "9.50-10.30",
+          "classes": {
+            "1А": {
+              "subject": "Русский язык",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "ИЗО/Творчество",
+              "teacher": "Фёдорова Е.В."
+            },
+            "1Э": {
+              "subject": "Математика",
+              "teacher": "Скакалова Н.Н."
+            },
+            "3Б": {
+              "subject": "Литературное чтение",
+              "teacher": "Веретенникова Т.А."
+            },
+            "4А": {
+              "subject": "Русский язык",
+              "teacher": "Житнова Е.В."
+            },
+            "4Б": {
+              "subject": "Математика",
+              "teacher": "Поряева Е.П."
+            }
+          }
+        },
+        "L3|10.40-11.20": {
+          "lesson_no": 3,
+          "time": "10.40-11.20",
+          "classes": {
+            "1А": {
+              "subject": "Литературное чтение",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Математика",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "ИЗО/Творчество",
+              "teacher": "Фёдорова Е.В."
+            },
+            "3Б": {
+              "subject": "Русский язык",
+              "teacher": "Архипова Н.Н."
+            },
+            "4А": {
+              "subject": "Математика",
+              "teacher": "Поряева Е.П."
+            },
+            "4Б": {
+              "subject": "Русский язык",
+              "teacher": "Житнова Е.В."
+            }
+          }
+        },
+        "L4|11.30-12.10": {
+          "lesson_no": 4,
+          "time": "11.30-12.10",
+          "classes": {
+            "1А": {
+              "subject": "Английский язык",
+              "teacher": "Карпова Н.С."
+            },
+            "1Б": {
+              "subject": "Русский язык",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "ИЗО/Творчество",
+              "teacher": "Фёдорова Е.В."
+            },
+            "3Б": {
+              "subject": "Математика",
+              "teacher": "Веретенникова Т.А."
+            },
+            "4А": {
+              "subject": "ОРКСЭ",
+              "teacher": "Поряева Е.П."
+            },
+            "4Б": {
+              "subject": "Литературное чтение",
+              "teacher": "Житнова Е.В."
+            }
+          }
+        },
+        "L5|12.20-13.00": {
+          "lesson_no": 5,
+          "time": "12.20-13.00",
+          "classes": {
+            "1А": {
+              "subject": "Окружающий мир",
+              "teacher": "Мельникова Е.С."
+            },
+            "1Б": {
+              "subject": "Литературное чтение",
+              "teacher": "Хлопотова И.В."
+            },
+            "1Э": {
+              "subject": "Литературное чтение",
+              "teacher": "Скакалова Н.Н."
+            },
+            "3Б": {
+              "subject": "Английский язык",
+              "teacher": "Барабанова М.А."
+            },
+            "4А": {
+              "subject": "Литературное чтение",
+              "teacher": "Поряева Е.П."
+            },
+            "4Б": {
+              "subject": "ОРКСЭ",
+              "teacher": "Житнова Е.В."
+            }
+          }
+        },
+        "L6|13.15-14.00": {
+          "lesson_no": 6,
+          "time": "13.15-14.00",
+          "classes": {
+            "3Б": {
+              "subject": "ИЗО/Творчество",
+              "teacher": "Фёдорова Е.В."
+            },
+            "4А": {
+              "subject": "Музыка",
+              "teacher": "Шестакова Е.Е."
+            },
+            "4Б": {
+              "subject": "Английский язык",
+              "teacher": "Михалкина О.П."
+            }
+          }
+        },
+        "L8|15.00-15.40": {
+          "lesson_no": 8,
+          "time": "15.00-15.40",
+          "classes": {
+            "1Э": {
+              "subject": "Научный клуб",
+              "teacher": "Коршунова И.Ю."
+            }
+          }
+        },
+        "L9|15.50-16.30": {
+          "lesson_no": 9,
+          "time": "15.50-16.30",
+          "classes": {
+            "1А": {
+              "subject": "Сценическая речь",
+              "teacher": "Алексушин Н.Г."
+            },
+            "1Б": {
+              "subject": "Научный клуб",
+              "teacher": "Коршунова И.Ю."
+            },
+            "1Э": {
+              "subject": "Шахматы",
+              "teacher": "Антошин Е.А."
+            }
+          }
+        },
+        "L10|16.40-17.20": {
+          "lesson_no": 10,
+          "time": "16.40-17.20",
+          "classes": {
+            "1А": {
+              "subject": "Научный клуб",
+              "teacher": "Коршунова И.Ю."
+            },
+            "1Б": {
+              "subject": "Сценическая речь",
+              "teacher": "Алексушин Н.Г."
+            },
+            "1Э": {
+              "subject": "Сценическая речь",
+              "teacher": "Алексушин Н.Г."
+            }
+          }
         }
       }
     }
