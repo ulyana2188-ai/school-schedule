@@ -5358,3 +5358,325 @@ async function saveAvailability() {
     setTimeout(() => { msg.style.display = "none"; }, 2500);
   }
 }
+
+// ============================================================
+// UNDO HISTORY
+// ============================================================
+
+const UNDO_STACK = []; // each entry: array of {dept,day,lkey,cls, before, after}
+const UNDO_MAX = 20;
+
+// Push snapshot of cells before & after an operation
+function _pushUndo(steps) {
+  // steps: [{dept,day,lkey,cls, before, after}]
+  UNDO_STACK.push(steps);
+  if (UNDO_STACK.length > UNDO_MAX) UNDO_STACK.shift();
+  _updateUndoBtn();
+}
+
+function _updateUndoBtn() {
+  const btn = document.getElementById("undoBtn");
+  if (!btn) return;
+  btn.style.display = EDIT_MODE && UNDO_STACK.length > 0 ? "" : "none";
+  btn.title = UNDO_STACK.length > 0
+    ? `Отменить последнее действие (${UNDO_STACK.length} в истории) · Ctrl+Z`
+    : "Нет действий для отмены";
+}
+
+async function undoLastEdit() {
+  if (!UNDO_STACK.length) return;
+  const steps = UNDO_STACK.pop();
+  _updateUndoBtn();
+  try {
+    for (const step of [...steps].reverse()) {
+      if (!step.before) {
+        // Was a new edit → revert (delete)
+        await API.revertEdit(step.dept, step.day, step.lkey, step.cls);
+      } else if (step.before.cleared) {
+        await API.saveEdit({
+          dept: step.dept, day: step.day, lesson_key: step.lkey, cls: step.cls,
+          lesson_no: step.before.lesson_no, time: step.before.time, cleared: true,
+        });
+      } else {
+        await API.saveEdit({
+          dept: step.dept, day: step.day, lesson_key: step.lkey, cls: step.cls,
+          lesson_no: step.before.lesson_no, time: step.before.time,
+          subject: step.before.subject, teacher: step.before.teacher,
+          room: step.before.room, groups: step.before.groups, cleared: false,
+        });
+      }
+    }
+    await reloadSchedule();
+    render();
+  } catch (e) {
+    alert("Ошибка при отмене: " + e.message);
+  }
+}
+
+// Wrap API.saveEdit to intercept and record undo snapshots
+const _origSaveEdit = API.saveEdit.bind(API);
+API.saveEdit = async function(d) {
+  // Capture before state for undo (only in edit mode)
+  if (EDIT_MODE) {
+    const before = getCellInfo(d.dept, d.day, d.lesson_key, d.cls);
+    const result = await _origSaveEdit(d);
+    // after = the payload we just saved
+    const after = { ...d };
+    if (!API._pendingUndoBatch) {
+      _pushUndo([{ dept: d.dept, day: d.day, lkey: d.lesson_key, cls: d.cls, before, after }]);
+    } else {
+      API._pendingUndoBatch.push({ dept: d.dept, day: d.day, lkey: d.lesson_key, cls: d.cls, before, after });
+    }
+    return result;
+  }
+  return _origSaveEdit(d);
+};
+
+// Batch multiple saveEdits as one undo entry (for drag-drop)
+API._startUndoBatch = function() { API._pendingUndoBatch = []; };
+API._commitUndoBatch = function() {
+  if (API._pendingUndoBatch && API._pendingUndoBatch.length) {
+    _pushUndo(API._pendingUndoBatch);
+  }
+  API._pendingUndoBatch = null;
+};
+
+// Patch toggleEditMode to update undo btn visibility
+const _origToggleEdit = toggleEditMode;
+window.toggleEditMode = function() {
+  _origToggleEdit();
+  _updateUndoBtn();
+  const cpBtn = document.getElementById("copyModeBtn");
+  if (cpBtn) cpBtn.style.display = EDIT_MODE ? "" : "none";
+  if (!EDIT_MODE) _setCopyMode(false);
+};
+
+// Patch onCellDrop to use batch undo
+const _origOnCellDrop = onCellDrop;
+window.onCellDrop = async function(e) {
+  API._startUndoBatch();
+  try { await _origOnCellDrop(e); }
+  finally { API._commitUndoBatch(); }
+};
+
+// ============================================================
+// COPY MODE
+// ============================================================
+
+let _copyMode = false;
+let _copySourceInfo = null; // {dept, day, lkey, cls, info}
+
+function toggleCopyMode() {
+  _setCopyMode(!_copyMode);
+}
+
+function _setCopyMode(on) {
+  _copyMode = on;
+  _copySourceInfo = null;
+  const btn = document.getElementById("copyModeBtn");
+  if (btn) {
+    btn.classList.toggle("active", on);
+    btn.innerHTML = on ? "✕ Выйти из копирования" : "⧉ Копировать";
+    btn.title = on ? "Нажмите на урок для копирования, потом на место назначения" : "Режим копирования ячеек";
+  }
+  document.body.classList.toggle("copy-mode", on);
+  // Show hint
+  const hint = document.getElementById("copyModeHint");
+  if (hint) hint.style.display = on ? "" : "none";
+}
+
+// Called from cell click in copy mode (we hook into renderGrid)
+function onCopyCellClick(dept, day, lkey, cls, lessonNo, time) {
+  const info = getCellInfo(dept, day, lkey, cls);
+  if (!info) return; // can't copy empty cell
+  _copySourceInfo = { dept, day, lkey, cls, lessonNo, time, info };
+  openCopyPicker();
+}
+
+function openCopyPicker() {
+  if (!_copySourceInfo) return;
+  const src = _copySourceInfo;
+  document.getElementById("copyPickerSrc").textContent =
+    `Копируем: ${src.dept} · ${src.cls} кл · ${src.day} · Урок ${src.lessonNo}`;
+
+  // Fill day options (all days)
+  const daysSel = document.getElementById("cpDay");
+  daysSel.innerHTML = DAYS.map(d => `<option value="${d}" ${d === src.day ? "selected" : ""}>${d}</option>`).join("");
+
+  // Fill class options for the same dept
+  const clsData = DATA[src.dept];
+  const clsList = clsData ? clsData.classes : [];
+  document.getElementById("cpCls").innerHTML = clsList.map(c => `<option value="${c}" ${c === src.cls ? "selected" : ""}>${c} класс</option>`).join("");
+
+  document.getElementById("cpError").textContent = "";
+  document.getElementById("copyPickerBg").classList.add("show");
+}
+
+function closeCopyPicker() {
+  document.getElementById("copyPickerBg").classList.remove("show");
+}
+
+async function confirmCopy() {
+  if (!_copySourceInfo) return;
+  const src = _copySourceInfo;
+  const tgtDay = document.getElementById("cpDay").value;
+  const tgtCls = document.getElementById("cpCls").value;
+  const errEl = document.getElementById("cpError");
+  errEl.textContent = "";
+
+  if (tgtDay === src.day && tgtCls === src.cls) {
+    errEl.textContent = "Источник и цель совпадают — выберите другой день или класс.";
+    return;
+  }
+
+  // Find lkey for the target day/lesson_no
+  const deptData = DATA[src.dept];
+  let tgtLkey = src.lkey, tgtLessonNo = src.lessonNo, tgtTime = src.time;
+  // Try to find a matching slot in the target day
+  if (deptData && deptData.schedule && deptData.schedule[tgtDay]) {
+    const daySlots = deptData.schedule[tgtDay];
+    // Find slot with same lesson_no
+    for (const [lk, ld] of Object.entries(daySlots)) {
+      if (ld.lesson_no === src.lessonNo) { tgtLkey = lk; tgtTime = ld.time; break; }
+    }
+  }
+
+  try {
+    API._startUndoBatch();
+    await API.saveEdit({
+      dept: src.dept, day: tgtDay, lesson_key: tgtLkey, cls: tgtCls,
+      lesson_no: tgtLessonNo, time: tgtTime,
+      ...infoToEditPayload(src.info),
+    });
+    API._commitUndoBatch();
+    closeCopyPicker();
+    await reloadSchedule();
+    render();
+  } catch (e) {
+    API._pendingUndoBatch = null;
+    errEl.textContent = "Ошибка: " + e.message;
+  }
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+
+document.addEventListener("keydown", function(e) {
+  // Esc — close top-most open modal
+  if (e.key === "Escape") {
+    // Close QR
+    if (document.getElementById("qrModalBg")?.classList.contains("show")) { closeQrModal(); return; }
+    // Close copy picker
+    if (document.getElementById("copyPickerBg")?.classList.contains("show")) { closeCopyPicker(); return; }
+    // Close copy mode
+    if (_copyMode) { _setCopyMode(false); return; }
+    // Close cell editor
+    const cellModal = document.getElementById("cellEditModal");
+    if (cellModal?.classList.contains("show")) { cellModal.classList.remove("show"); return; }
+    // Close generic modal
+    const bg = document.getElementById("modalBg");
+    if (bg?.classList.contains("show")) { closeModal(); return; }
+  }
+
+  // Don't intercept if user is typing in an input/textarea
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) return;
+
+  // Ctrl+Z — undo
+  if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+    e.preventDefault();
+    if (EDIT_MODE && UNDO_STACK.length) undoLastEdit();
+    return;
+  }
+
+  // Arrow keys — navigate days (only when on schedule section)
+  if (state.section === "schedule" && !EDIT_MODE) {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      const idx = DAYS.indexOf(state.day);
+      if (e.key === "ArrowRight" && idx < DAYS.length - 1) { setDay(DAYS[idx + 1]); e.preventDefault(); }
+      if (e.key === "ArrowLeft"  && idx > 0)               { setDay(DAYS[idx - 1]); e.preventDefault(); }
+      return;
+    }
+  }
+
+  // E — toggle edit mode (head only, on schedule section)
+  if (e.key === "e" && state.section === "schedule" && CURRENT_USER?.role === "head" && !e.ctrlKey && !e.metaKey) {
+    toggleEditMode();
+    return;
+  }
+});
+
+// ============================================================
+// QR CODE MODAL
+// ============================================================
+
+let _qrInstance = null;
+
+function openQrModal() {
+  const dept = state.dept || (DEPTS && DEPTS[0]) || "";
+  const day  = state.day  || "";
+  const url  = `${location.origin}/?dept=${encodeURIComponent(dept)}&day=${encodeURIComponent(day)}`;
+
+  document.getElementById("qrModalDesc").textContent = `${dept} · ${day}`;
+  document.getElementById("qrLink").textContent = url;
+
+  const canvas = document.getElementById("qrCanvas");
+  canvas.innerHTML = "";
+  try {
+    _qrInstance = new QRCode(canvas, {
+      text: url,
+      width: 220, height: 220,
+      colorDark: "#1e1b4b",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch (e) {
+    canvas.innerHTML = `<p style="color:#ef4444;font-size:12px;">Не удалось создать QR-код</p>`;
+  }
+
+  document.getElementById("qrModalBg").classList.add("show");
+}
+
+function closeQrModal() {
+  document.getElementById("qrModalBg").classList.remove("show");
+  _qrInstance = null;
+}
+
+function copyQrLink() {
+  const link = document.getElementById("qrLink").textContent;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = event.target;
+    btn.textContent = "✅ Скопировано!";
+    setTimeout(() => { btn.textContent = "📋 Скопировать ссылку"; }, 1800);
+  }).catch(() => { alert("Скопируйте вручную:\n" + link); });
+}
+
+// ============================================================
+// COPY MODE CELL HOOK — patch renderGrid to add copy onclick
+// ============================================================
+const _origRenderGrid = renderGrid;
+window.renderGrid = function() {
+  _origRenderGrid();
+  if (!EDIT_MODE || !_copyMode) return;
+  // Re-attach copy click handlers
+  document.querySelectorAll('td[data-cell]').forEach(td => {
+    td.style.cursor = "copy";
+    td.addEventListener("click", function(e) {
+      if (!_copyMode) return;
+      e.stopPropagation();
+      const src = parseCellKey(td.dataset.cell);
+      onCopyCellClick(src.dept, src.day, src.lkey, src.cls, src.lesson_no, src.time);
+    }, { once: false });
+  });
+};
+
+// Add copy mode hint to toolbar
+(function addCopyHint() {
+  const toolbar = document.querySelector(".toolbar");
+  if (!toolbar) return;
+  const hint = document.createElement("span");
+  hint.id = "copyModeHint";
+  hint.style.cssText = "display:none;font-size:12px;color:var(--ip-blue);font-weight:600;margin-left:8px;";
+  hint.textContent = "⧉ Нажмите на урок для копирования";
+  toolbar.appendChild(hint);
+})();

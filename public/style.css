@@ -733,3 +733,8 @@ body.edit-mode table.schedule td { position: relative; }
   border-radius: 4px;
 }
 .link-btn:hover { background: var(--sidebar); }
+
+/* ── Copy mode & undo btn active states ── */
+.btn.active { background: var(--ip-blue) !important; color: #fff !important; border-color: var(--ip-blue) !important; }
+body.copy-mode td[data-cell] { cursor: copy !important; outline: 2px dashed var(--ip-blue); outline-offset: -2px; }
+body.copy-mode td[data-cell]:hover { background: rgba(99,102,241,.12) !important; }
