@@ -288,6 +288,8 @@ async function enterApp() {
   await loadInitialData();
   initUI();
   startNotificationPolling();
+  _updateThemeBtn();
+  _patchCellColors();
 }
 
 async function loadInitialData() {
@@ -4563,3 +4565,322 @@ async function boot() {
   showLogin();
 }
 boot();
+
+// ============================================================
+// 9. DARK / LIGHT THEME
+// ============================================================
+(function() {
+  const saved = (() => { try { return localStorage.getItem("ip_theme"); } catch(e){return null;} })();
+  if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+})();
+
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const next = isDark ? "light" : "dark";
+  if (next === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  try { localStorage.setItem("ip_theme", next); } catch(e){}
+  _updateThemeBtn();
+}
+
+function _updateThemeBtn() {
+  const btn = document.getElementById("themeToggleBtn");
+  if (!btn) return;
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  btn.textContent = isDark ? "☀️" : "🌙";
+  btn.title = isDark ? "Светлая тема" : "Тёмная тема";
+}
+
+// Call on page load after DOM ready
+document.addEventListener("DOMContentLoaded", _updateThemeBtn);
+setTimeout(_updateThemeBtn, 100);
+
+// ============================================================
+// 10. SCHEDULE SEARCH
+// ============================================================
+let _searchTimer = null;
+
+function scheduleSearchInput(val) {
+  clearTimeout(_searchTimer);
+  if (!val.trim()) { closeSearch(); return; }
+  _searchTimer = setTimeout(() => runScheduleSearch(val.trim()), 220);
+}
+
+function closeSearch() {
+  const panel = document.getElementById("searchResultsPanel");
+  if (panel) panel.classList.remove("show");
+  const inp = document.getElementById("scheduleSearch");
+  if (inp) inp.value = "";
+}
+
+function runScheduleSearch(query) {
+  const panel = document.getElementById("searchResultsPanel");
+  const list  = document.getElementById("searchResultsList");
+  const cnt   = document.getElementById("searchResultsCount");
+  if (!panel || !list) return;
+
+  const q = query.toLowerCase();
+  const results = [];
+
+  for (const dept of DEPTS) {
+    if (!DATA[dept]) continue;
+    const sched = DATA[dept].schedule;
+    for (const day of DAYS) {
+      if (!sched[day]) continue;
+      for (const lkey in sched[day]) {
+        const ld = sched[day][lkey];
+        for (const cls in ld.classes) {
+          const info = ld.classes[cls];
+          const items = info.groups ? info.groups : [info];
+          for (const it of items) {
+            const subj    = (it.subject || "").toLowerCase();
+            const teacher = (it.teacher || "").toLowerCase();
+            const room    = (it.room || info.room || "").toLowerCase();
+            const clsLow  = cls.toLowerCase();
+            const deptLow = dept.toLowerCase();
+            if (subj.includes(q) || teacher.includes(q) || room.includes(q) || clsLow.includes(q) || deptLow.includes(q)) {
+              results.push({ dept, day, time: ld.time, lesson_no: ld.lesson_no, cls, subject: it.subject || "", teacher: it.teacher || "", room: it.room || info.room || "" });
+              if (results.length >= 80) break;
+            }
+          }
+          if (results.length >= 80) break;
+        }
+        if (results.length >= 80) break;
+      }
+      if (results.length >= 80) break;
+    }
+    if (results.length >= 80) break;
+  }
+
+  if (results.length === 0) {
+    list.innerHTML = `<div class="srp-empty">Ничего не найдено по запросу «${escapeHtml(query)}»</div>`;
+  } else {
+    function hl(s) {
+      if (!s) return "—";
+      const idx = s.toLowerCase().indexOf(q);
+      if (idx < 0) return escapeHtml(s);
+      return escapeHtml(s.slice(0, idx)) + `<mark class="search-hl">${escapeHtml(s.slice(idx, idx+q.length))}</mark>` + escapeHtml(s.slice(idx+q.length));
+    }
+    list.innerHTML = results.map(r => `
+      <div class="srp-item" onclick="searchGoTo(${JSON.stringify(r.dept)},${JSON.stringify(r.day)})">
+        <div class="srp-main">${hl(r.subject)} · ${hl(r.cls)} кл</div>
+        <div class="srp-sub">${hl(r.dept)} · ${r.day} · ${escapeHtml(r.time||'')} · учитель: ${hl(r.teacher)}${r.room ? ' · каб ' + hl(r.room) : ''}</div>
+      </div>`).join("");
+  }
+  cnt.textContent = results.length >= 80 ? "Показаны первые 80 результатов" : `Найдено: ${results.length}`;
+  panel.classList.add("show");
+
+  // Close on outside click
+  setTimeout(() => {
+    const handler = (e) => {
+      if (!panel.contains(e.target) && e.target.id !== "scheduleSearch") {
+        panel.classList.remove("show");
+        document.removeEventListener("click", handler);
+      }
+    };
+    document.addEventListener("click", handler);
+  }, 10);
+}
+
+function searchGoTo(dept, day) {
+  closeSearch();
+  // Switch to schedule section and navigate to that dept+day
+  setSection("schedule");
+  setDept(dept);
+  const dayBtns = document.querySelectorAll(".day-tab");
+  dayBtns.forEach(b => { if (b.dataset.day === day) b.click(); });
+}
+
+// ============================================================
+// 11. SUBJECT COLOR CODING
+// ============================================================
+const SUBJECT_COLORS = {
+  // Математика
+  "математика":        "#3B82F6",
+  "алгебра":           "#3B82F6",
+  "геометрия":         "#6366F1",
+  "информатика":       "#8B5CF6",
+  // Русский / Литература
+  "русский язык":      "#EF4444",
+  "русский":           "#EF4444",
+  "литература":        "#F97316",
+  // Иностранные
+  "английский язык":   "#10B981",
+  "английский":        "#10B981",
+  "немецкий язык":     "#059669",
+  "французский язык":  "#34D399",
+  // Естественные
+  "физика":            "#F59E0B",
+  "химия":             "#EAB308",
+  "биология":          "#84CC16",
+  "география":         "#22C55E",
+  "экология":          "#16A34A",
+  // Общественные
+  "история":           "#EC4899",
+  "обществознание":    "#DB2777",
+  "право":             "#BE185D",
+  // Физкультура / ОБЖ
+  "физическая культура": "#14B8A6",
+  "физкультура":         "#14B8A6",
+  "обж":                 "#0EA5E9",
+  // Искусство
+  "музыка":            "#A855F7",
+  "изо":               "#D946EF",
+  "мхк":               "#C026D3",
+  // Прочее
+  "технология":        "#78716C",
+  "труд":              "#78716C",
+  "классный час":      "#94A3B8",
+};
+
+function getSubjectColor(subject) {
+  if (!subject) return null;
+  const key = subject.toLowerCase().trim();
+  if (SUBJECT_COLORS[key]) return SUBJECT_COLORS[key];
+  // Partial match
+  for (const [k, v] of Object.entries(SUBJECT_COLORS)) {
+    if (key.includes(k) || k.includes(key.split(" ")[0])) return v;
+  }
+  return null;
+}
+
+function subjectDot(subject) {
+  const color = getSubjectColor(subject);
+  if (!color) return "";
+  return `<span class="subj-color-dot" style="background:${color};"></span>`;
+}
+
+// Patch renderCellContent to include color dot — override after definition
+const _origRenderCellContent = typeof renderCellContent !== "undefined" ? renderCellContent : null;
+// We'll apply it in a post-boot hook
+function _patchCellColors() {
+  // Cells are rendered via renderCellContent — patch it
+  if (typeof renderCellContent === "function") {
+    const orig = renderCellContent;
+    window.renderCellContent = function(dept, day, lkey, cls) {
+      const html = orig(dept, day, lkey, cls);
+      // Inject color dot after first cell-subject span
+      return html.replace(/<span class="cell-subject">(.*?)<\/span>/,
+        (m, subj) => {
+          const plain = subj.replace(/<[^>]+>/g,'');
+          const dot = subjectDot(plain);
+          return `<span class="cell-subject">${dot}${subj}</span>`;
+        });
+    };
+  }
+}
+
+// ============================================================
+// 12. EXPORT SCHEDULE TO PDF
+// ============================================================
+function exportSchedulePDF() {
+  const dept = state.dept;
+  const dayLabel = state.day;
+  const view = state.view;
+
+  // Build a self-contained print window
+  const win = window.open("", "_blank", "width=1100,height=800");
+  if (!win) { alert("Разрешите всплывающие окна для экспорта PDF"); return; }
+
+  const days = view === "week" ? DAYS : [dayLabel];
+  if (!DATA[dept]) { win.close(); return; }
+  const sched = DATA[dept].schedule;
+  const times = [];
+  // Collect unique lesson keys in order
+  for (const day of days) {
+    if (!sched[day]) continue;
+    for (const lkey in sched[day]) {
+      const ld = sched[day][lkey];
+      if (!times.find(t => t.lkey === lkey)) {
+        times.push({ lkey, time: ld.time, lesson_no: ld.lesson_no });
+      }
+    }
+  }
+  times.sort((a,b) => (a.lesson_no||0)-(b.lesson_no||0));
+
+  // Collect classes
+  const classes = new Set();
+  for (const day of days) {
+    if (!sched[day]) continue;
+    for (const lkey in sched[day]) {
+      for (const cls in sched[day][lkey].classes) classes.add(cls);
+    }
+  }
+  const sortedCls = [...classes].sort((a,b) => parseInt(a)-parseInt(b)||a.localeCompare(b,"ru"));
+
+  function cellHtml(day, lkey, cls) {
+    const ld = sched[day] && sched[day][lkey];
+    if (!ld) return '';
+    const info = ld.classes[cls];
+    if (!info) return '';
+    const items = info.groups ? info.groups : [info];
+    return items.map(it => {
+      const color = getSubjectColor(it.subject || "");
+      const dot = color ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:3px;vertical-align:middle;"></span>` : '';
+      return `<div style="font-size:10px;line-height:1.4;">
+        <div style="font-weight:600;">${dot}${escapeHtml(it.subject||'')}</div>
+        <div style="color:#555;font-size:9px;">${escapeHtml(it.teacher||'')}${it.room||info.room ? ' · ' + escapeHtml(it.room||info.room) : ''}</div>
+      </div>`;
+    }).join('<hr style="border:none;border-top:1px solid #eee;margin:2px 0;">');
+  }
+
+  let tableHtml = '';
+  if (view === "week") {
+    // Rows = time slots, columns = days, rows repeated per class group is complex
+    // Simpler: one table per class
+    for (const cls of sortedCls) {
+      tableHtml += `<h3 style="margin:16px 0 6px;font-size:13px;">${escapeHtml(cls)} класс</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px;">
+        <thead><tr style="background:#f3f4f6;">
+          <th style="border:1px solid #ddd;padding:4px 6px;width:80px;">Урок</th>
+          ${DAYS.map(d => `<th style="border:1px solid #ddd;padding:4px 6px;">${escapeHtml(d)}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+        ${times.map(t => `<tr>
+          <td style="border:1px solid #ddd;padding:4px 6px;color:#666;font-size:9px;white-space:nowrap;">${t.lesson_no||''} · ${escapeHtml(t.time||'')}</td>
+          ${DAYS.map(d => `<td style="border:1px solid #ddd;padding:4px 6px;vertical-align:top;">${cellHtml(d,t.lkey,cls)}</td>`).join('')}
+        </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+  } else {
+    // Day view: rows = time, cols = classes
+    tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:10px;">
+      <thead><tr style="background:#f3f4f6;">
+        <th style="border:1px solid #ddd;padding:4px 6px;width:80px;">Время</th>
+        ${sortedCls.map(c => `<th style="border:1px solid #ddd;padding:4px 6px;">${escapeHtml(c)}</th>`).join('')}
+      </tr></thead>
+      <tbody>
+      ${times.map(t => `<tr>
+        <td style="border:1px solid #ddd;padding:4px 6px;color:#666;font-size:9px;white-space:nowrap;background:#fafafa;">${escapeHtml(t.time||'')}</td>
+        ${sortedCls.map(cls => `<td style="border:1px solid #ddd;padding:4px 6px;vertical-align:top;">${cellHtml(dayLabel,t.lkey,cls)}</td>`).join('')}
+      </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  const title = `Расписание · ${escapeHtml(dept)} · ${view === 'week' ? 'Вся неделя' : escapeHtml(dayLabel)}`;
+  win.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; color: #111; }
+  h1 { font-size: 16px; margin-bottom: 4px; }
+  .sub { font-size: 11px; color: #666; margin-bottom: 16px; }
+  @media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    button { display: none; }
+  }
+</style>
+</head><body>
+  <h1>${title}</h1>
+  <div class="sub">Сформировано: ${new Date().toLocaleDateString('ru-RU', {day:'2-digit',month:'long',year:'numeric'})}</div>
+  <button onclick="window.print()" style="margin-bottom:14px;padding:6px 14px;cursor:pointer;background:#4f46e5;color:#fff;border:none;border-radius:6px;font-size:12px;">🖨 Печать / Сохранить PDF</button>
+  ${tableHtml}
+</body></html>`);
+  win.document.close();
+}

@@ -94,6 +94,7 @@
     </div>
     <div class="header-actions">
       <button class="btn" onclick="showReplacement()">+ Замена</button>
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Тёмная / светлая тема">🌙</button>
       <div class="bell-wrap">
         <button class="bell" id="bellBtn" onclick="toggleInbox()" title="Уведомления">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
@@ -207,11 +208,16 @@
           <option value="all">Все классы</option>
         </select>
       </div>
+      <div class="schedule-search-wrap">
+        <span class="srch-icon">🔍</span>
+        <input type="text" id="scheduleSearch" placeholder="Поиск…" oninput="scheduleSearchInput(this.value)" onkeydown="if(event.key==='Escape')closeSearch()">
+      </div>
       <div class="view-switch">
         <button class="active" data-view="grid" onclick="switchView('grid')">День</button>
         <button data-view="week" onclick="switchView('week')">Вся неделя</button>
       </div>
       <button class="btn secondary" onclick="printSchedule()" style="margin-left:6px;">🖨 Печать</button>
+      <button class="btn secondary" onclick="exportSchedulePDF()" style="margin-left:6px;" title="Экспорт в PDF">📄 PDF</button>
       <button id="editModeBtn" class="btn secondary" onclick="toggleEditMode()" style="display:none;margin-left:6px;">✎ Редактировать</button>
       <button id="importFullBtn" class="btn" onclick="openImportFullModal()" style="display:none;margin-left:6px;" title="Загрузить готовое расписание из Excel">⤴ Загрузить расписание</button>
     </div>
@@ -628,6 +634,15 @@
       <div id="importFullCurrentStatus" style="margin-top:14px;padding:10px 12px;background:#F9FAFB;border-radius:6px;font-size:12px;display:none;"></div>
     </div>
   </div>
+</div>
+
+<!-- Search results panel -->
+<div id="searchResultsPanel">
+  <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:12px;font-weight:600;color:var(--text-muted);" id="searchResultsCount">Результаты поиска</span>
+    <button class="link-btn" onclick="closeSearch()" style="font-size:12px;">✕</button>
+  </div>
+  <div id="searchResultsList"></div>
 </div>
 
 <script src="/app.js"></script>
