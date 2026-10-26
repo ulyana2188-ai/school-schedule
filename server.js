@@ -918,7 +918,7 @@ app.delete("/api/schedule-slots/slot/:id", authMiddleware, requireHead, async (r
 
 // === Generate Schedule (lightweight server-side validation only; main CSP runs client-side) ===
 // POST /api/generate — validate payload, optionally run server-side CSP, save version+slots
-app.post("/api/generate", requireAuth, requireHead, async (req, res) => {
+app.post("/api/generate", authMiddleware, requireHead, async (req, res) => {
   // The main CSP engine runs client-side (scheduler is in app.js).
   // This endpoint is a fallback server-side generator: it receives dept+version info
   // and can create the version record. Full generation is done client-side then
