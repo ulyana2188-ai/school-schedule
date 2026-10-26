@@ -1446,41 +1446,68 @@ app.get("/api/absence-requests", authMiddleware, async (req, res) => {
 // POST /api/absence-requests — teacher submits their own absence
 app.post("/api/absence-requests", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
-  const { start_date, end_date, kind, note } = req.body || {};
+  const { start_date, end_date, kind, note, teacher_id: bodyTeacherId } = req.body || {};
   if (!start_date || !end_date || !kind) return res.status(400).json({ error: "bad_request" });
-  const dept = u.dept || (u.depts && u.depts[0]);
+
+  const isAdminRole = u.role === "head" || u.role === "director";
+
+  // Head/director can submit on behalf of a teacher
+  let targetUserId = req.userId;
+  let targetUser = u;
+  if (isAdminRole && bodyTeacherId && bodyTeacherId !== req.userId) {
+    const tr = await db.query("SELECT * FROM users WHERE id=$1", [bodyTeacherId]);
+    if (!tr.rows.length) return res.status(404).json({ error: "teacher_not_found" });
+    targetUser = tr.rows[0];
+    targetUserId = bodyTeacherId;
+    // Verify head has access to that teacher's dept
+    const allowedDepts = getAllowedDepts(u);
+    if (!allowedDepts.includes(targetUser.dept)) return res.status(403).json({ error: "forbidden" });
+  }
+
+  const dept = targetUser.dept || (targetUser.depts && targetUser.depts[0]);
   if (!dept) return res.status(400).json({ error: "no_dept" });
+
+  // Head-submitted requests are auto-confirmed (no approval needed)
+  const status = isAdminRole ? "confirmed" : "pending";
+
   try {
     const r = await db.query(
-      `INSERT INTO absence_requests (teacher_id, dept, start_date, end_date, kind, note, status)
-       VALUES ($1,$2,$3,$4,$5,$6,'pending') RETURNING *`,
-      [req.userId, dept, start_date, end_date, kind, note || null]
+      `INSERT INTO absence_requests (teacher_id, dept, start_date, end_date, kind, note, status, reviewed_by, reviewed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,${isAdminRole ? "NOW()" : "NULL"}) RETURNING *`,
+      [targetUserId, dept, start_date, end_date, kind, note || null, status, isAdminRole ? req.userId : null]
     );
     const req_ = r.rows[0];
 
-    // Also create a user_absence record immediately (optimistic)
+    // Create a user_absence record immediately
     await db.query(
       `INSERT INTO user_absences (user_id, start_date, end_date, kind, note, created_by)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [req.userId, start_date, end_date, kind, note || null, req.userId]
+      [targetUserId, start_date, end_date, kind, note || null, req.userId]
     );
 
-    // Notify all heads of this dept
-    const heads = await db.query(
-      "SELECT id FROM users WHERE role='head' AND (dept=$1 OR $1=ANY(depts))",
-      [dept]
-    );
     const kindLabel = { sick: "больничный", personal: "личные обстоятельства", other: "отсутствие" }[kind] || kind;
     const dateRange = start_date === end_date ? start_date : `${start_date} — ${end_date}`;
-    const title = `🤒 ${u.name} сообщает об отсутствии`;
-    const body = `${u.name} не выйдет на работу: ${dateRange}\nПричина: ${kindLabel}${note ? "\n" + note : ""}\n\nНужно проверить расписание на замены.`;
-    for (const h of heads.rows) {
-      await db.query(
-        "INSERT INTO notifications (to_user_id, title, body) VALUES ($1,$2,$3)",
-        [h.id, title, body]
+
+    if (!isAdminRole) {
+      // Notify heads of this dept
+      const heads = await db.query(
+        "SELECT id FROM users WHERE (role='head' OR role='director') AND (dept=$1 OR $1=ANY(depts))",
+        [dept]
       );
-      sendPushToUser(h.id, title, body).catch(() => {});
+      const title = `🤒 ${targetUser.name} сообщает об отсутствии`;
+      const body = `${targetUser.name} не выйдет на работу: ${dateRange}\nПричина: ${kindLabel}${note ? "\n" + note : ""}\n\nНужно проверить расписание на замены.`;
+      for (const h of heads.rows) {
+        await db.query("INSERT INTO notifications (to_user_id, title, body) VALUES ($1,$2,$3)", [h.id, title, body]);
+        sendPushToUser(h.id, title, body).catch(() => {});
+      }
+    } else {
+      // Notify the teacher that absence was registered by admin
+      const title = `📋 Ваше отсутствие зарегистрировано`;
+      const body = `Завуч ${u.name} зарегистрировал ваше отсутствие: ${dateRange}\nПричина: ${kindLabel}${note ? "\n" + note : ""}`;
+      await db.query("INSERT INTO notifications (to_user_id, title, body) VALUES ($1,$2,$3)", [targetUserId, title, body]).catch(() => {});
+      sendPushToUser(targetUserId, title, body).catch(() => {});
     }
+
     res.json({ request: req_ });
   } catch (e) {
     console.error(e);

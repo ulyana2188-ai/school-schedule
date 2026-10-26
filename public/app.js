@@ -4803,14 +4803,16 @@ async function renderAbsReq() {
 
   let html = `<div class="section-header"><h2>${isHead ? "📋 Заявки на отсутствие" : "🤒 Мои заявки на отсутствие"}</h2></div>`;
 
-  // Form for teacher to submit absence
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Form for teacher to submit their own absence
   if (!isHead) {
     html += `
     <div class="card" style="margin:16px;padding:16px;max-width:480px">
       <h3 style="margin:0 0 12px">Сообщить об отсутствии</h3>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <label>Дата начала <input type="date" id="absReqStart" class="input" required></label>
-        <label>Дата окончания <input type="date" id="absReqEnd" class="input" required></label>
+        <label>Дата начала <input type="date" id="absReqStart" class="input" value="${todayStr}" required></label>
+        <label>Дата окончания <input type="date" id="absReqEnd" class="input" value="${todayStr}" required></label>
         <label>Причина
           <select id="absReqKind" class="input">
             <option value="sick">🤒 Больничный</option>
@@ -4819,7 +4821,53 @@ async function renderAbsReq() {
           </select>
         </label>
         <label>Комментарий <input type="text" id="absReqNote" class="input" placeholder="Необязательно..."></label>
-        <button class="btn btn-primary" onclick="submitAbsenceRequest()">Отправить заявку</button>
+        <button class="btn" onclick="submitAbsenceRequest()">Отправить заявку</button>
+        <div id="absReqMsg" style="display:none;font-size:13px"></div>
+      </div>
+    </div>`;
+  }
+
+  // Form for heads to register absence for any teacher
+  if (isHead) {
+    const myDepts = CURRENT_USER.role === "director"
+      ? Object.keys(ALL_TEACHERS).length > 0 ? null : null  // all
+      : (CURRENT_USER.depts && CURRENT_USER.depts.length > 0 ? CURRENT_USER.depts : [CURRENT_USER.dept]);
+
+    // Build teacher list from ACCOUNTS (head role excluded)
+    const teacherAccounts = ACCOUNTS.filter(a =>
+      a.role === "teacher" && a.is_active !== false &&
+      (CURRENT_USER.role === "director" || !myDepts || myDepts.includes(a.dept))
+    ).sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"));
+
+    const teacherOptions = teacherAccounts.map(t =>
+      `<option value="${t.id}">${escapeHtml(t.name)}${t.dept ? ' · ' + escapeHtml(t.dept) : ''}</option>`
+    ).join("");
+
+    html += `
+    <div class="card" style="margin:16px;padding:16px;max-width:560px">
+      <h3 style="margin:0 0 4px">➕ Зарегистрировать отсутствие учителя</h3>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Завуч может внести больничный напрямую — заявка сразу подтверждена.</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label>Учитель
+          <select id="absReqTeacher" class="input">
+            <option value="">— выберите учителя —</option>
+            ${teacherOptions}
+          </select>
+        </label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <label style="flex:1;min-width:140px">Дата начала <input type="date" id="absReqStart" class="input" value="${todayStr}" required></label>
+          <label style="flex:1;min-width:140px">Дата окончания <input type="date" id="absReqEnd" class="input" value="${todayStr}" required></label>
+        </div>
+        <label>Причина
+          <select id="absReqKind" class="input">
+            <option value="sick">🤒 Больничный</option>
+            <option value="vacation">🏖 Отпуск</option>
+            <option value="personal">📋 Личные обстоятельства</option>
+            <option value="other">📝 Другое</option>
+          </select>
+        </label>
+        <label>Комментарий <input type="text" id="absReqNote" class="input" placeholder="Необязательно..."></label>
+        <button class="btn" onclick="submitAbsenceRequestForTeacher()">Зарегистрировать</button>
         <div id="absReqMsg" style="display:none;font-size:13px"></div>
       </div>
     </div>`;
@@ -4856,12 +4904,6 @@ async function renderAbsReq() {
   }
 
   el.innerHTML = html;
-  // Set default dates (today + today)
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const startEl = document.getElementById("absReqStart");
-  const endEl = document.getElementById("absReqEnd");
-  if (startEl) startEl.value = todayStr;
-  if (endEl) endEl.value = todayStr;
 }
 
 async function submitAbsenceRequest() {
@@ -4875,6 +4917,25 @@ async function submitAbsenceRequest() {
   try {
     await API.createAbsenceRequest({ start_date, end_date, kind, note });
     if (msg) { msg.style.color = "#22c55e"; msg.textContent = "✅ Заявка отправлена! Завуч получит уведомление."; }
+    setTimeout(() => renderAbsReq(), 1500);
+  } catch (e) {
+    if (msg) { msg.style.color = "var(--err)"; msg.textContent = "Ошибка: " + e.message; }
+  }
+}
+
+async function submitAbsenceRequestForTeacher() {
+  const teacher_id = parseInt(document.getElementById("absReqTeacher")?.value);
+  const start_date = document.getElementById("absReqStart")?.value;
+  const end_date = document.getElementById("absReqEnd")?.value;
+  const kind = document.getElementById("absReqKind")?.value;
+  const note = document.getElementById("absReqNote")?.value;
+  const msg = document.getElementById("absReqMsg");
+  if (!teacher_id) { if (msg) { msg.style.display = ""; msg.style.color = "var(--err)"; msg.textContent = "Выберите учителя."; } return; }
+  if (!start_date || !end_date) { if (msg) { msg.style.display = ""; msg.style.color = "var(--err)"; msg.textContent = "Укажите даты."; } return; }
+  if (msg) { msg.style.display = ""; msg.style.color = "var(--accent)"; msg.textContent = "Сохраняю..."; }
+  try {
+    await API.createAbsenceRequest({ start_date, end_date, kind, note, teacher_id });
+    if (msg) { msg.style.color = "#22c55e"; msg.textContent = "✅ Отсутствие зарегистрировано. Учитель получит уведомление."; }
     setTimeout(() => renderAbsReq(), 1500);
   } catch (e) {
     if (msg) { msg.style.color = "var(--err)"; msg.textContent = "Ошибка: " + e.message; }
