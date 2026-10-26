@@ -61,7 +61,7 @@ function authMiddleware(req, res, next) {
 
 async function getUserById(id) {
   const r = await db.query(
-    "SELECT id, email, name, role, title, dept, depts, subjects, must_change FROM users WHERE id=$1",
+    "SELECT id, email, name, first_name, role, title, dept, depts, subjects, must_change FROM users WHERE id=$1",
     [id]
   );
   return r.rows[0] || null;
@@ -110,6 +110,14 @@ app.post("/api/auth/change-password", authMiddleware, async (req, res) => {
 app.get("/api/me", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
   if (!u) return res.status(404).json({ error: "not_found" });
+  res.json({ user: u });
+});
+
+app.patch("/api/me", authMiddleware, async (req, res) => {
+  const { first_name } = req.body || {};
+  const val = (first_name || "").trim().slice(0, 50);
+  await db.query("UPDATE users SET first_name=$1 WHERE id=$2", [val || null, req.userId]);
+  const u = await getUserById(req.userId);
   res.json({ user: u });
 });
 
@@ -2135,6 +2143,8 @@ async function bootstrap() {
   try {
     const sql = fs.readFileSync(path.join(__dirname, "db", "schema.sql"), "utf-8");
     await db.query(sql);
+    // Migrations
+    await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(50)");
     console.log("Schema OK.");
 
     // Auto-seed if users table is empty

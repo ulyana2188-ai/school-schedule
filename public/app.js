@@ -30,6 +30,7 @@ const API = {
   },
   changePassword(newPassword) { return this.fetch("/api/auth/change-password", { method: "POST", body: JSON.stringify({ newPassword }) }); },
   me() { return this.fetch("/api/me"); },
+  updateMe(data) { return this.fetch("/api/me", { method: "PATCH", body: JSON.stringify(data) }); },
   accounts() { return this.fetch("/api/accounts"); },
   schedule() { return this.fetch("/api/schedule"); },
   createReplacements(payload) { return this.fetch("/api/replacements", { method: "POST", body: JSON.stringify(payload) }); },
@@ -747,6 +748,14 @@ function renderUserMenu() {
     ${hasLessons ? `<div style="padding:4px 14px 8px;"><button onclick="quickSickToday()" class="btn" style="width:100%;background:var(--ip-magenta);">🤒 Я не выхожу сегодня</button></div>` : ''}
     ${hasLessons ? `<div style="padding:4px 14px 8px;"><button onclick="openMyCard()" class="link-btn" style="font-size:12px;">👤 Моя карточка</button></div>` : ''}
     <div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Как вас называть?</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input id="firstNameInput" type="text" placeholder="Введите имя…" value="${escapeHtml(u.first_name || '')}"
+          style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+        <button onclick="saveFirstName()" class="btn" style="padding:5px 10px;font-size:12px;">Сохранить</button>
+      </div>
+    </div>
+    <div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
       <button id="pushToggleBtn" onclick="togglePushNotifications()" class="link-btn" style="font-size:12px;display:none;">🔔 Включить уведомления</button>
     </div>
     <div style="padding:4px 14px 8px;border-top:1px solid var(--border);"><button onclick="logout()" class="link-btn" style="font-size:12px;color:var(--ip-magenta);">⏏ Выйти</button></div>
@@ -756,6 +765,25 @@ function renderUserMenu() {
 function openMyCard() {
   document.getElementById("userMenu").classList.remove("show");
   openTeacherCard(CURRENT_USER.name);
+}
+
+async function saveFirstName() {
+  const input = document.getElementById("firstNameInput");
+  if (!input) return;
+  const val = input.value.trim();
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  try {
+    const r = await API.updateMe({ first_name: val });
+    if (r?.user) {
+      CURRENT_USER.first_name = r.user.first_name;
+      btn.textContent = "✓";
+      setTimeout(() => { btn.textContent = "Сохранить"; btn.disabled = false; }, 1500);
+    }
+  } catch(e) {
+    btn.disabled = false;
+    alert("Ошибка сохранения");
+  }
 }
 
 function quickSickToday() {
@@ -1374,7 +1402,7 @@ function renderToday() {
 
   const _greetHour = new Date().getHours();
   const _greetWord = _greetHour < 12 ? "Доброе утро" : _greetHour < 17 ? "Добрый день" : "Добрый вечер";
-  const _firstName = escapeHtml((u.name || '').split(' ')[0] || u.name);
+  const _firstName = escapeHtml(u.first_name || (u.name || '').split(' ')[0] || u.name);
   let html = `<div class="today-greeting">
     <h2>${_greetWord}, ${_firstName}!</h2>
     <div class="day-of-week">Сегодня ${escapeHtml(dateStr)}</div>
