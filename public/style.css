@@ -201,7 +201,16 @@ body {
 .um-role { font-size: 10px; color: var(--text-muted); }
 
 /* SECTION NAV */
-.section-nav { display: flex; gap: 6px; margin-bottom: 14px; }
+.section-nav-wrap { position: relative; }
+.section-nav {
+  display: flex; gap: 6px; margin-bottom: 14px;
+  flex-wrap: wrap;
+  transition: max-height 0.25s ease, overflow 0.25s;
+}
+.section-nav.nav-collapsed {
+  max-height: 52px; overflow: hidden;
+}
+.nav-toggle-btn { font-weight: 700 !important; }
 .section-btn {
   background: var(--card); border: 1px solid var(--border);
   padding: 9px 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
@@ -320,7 +329,7 @@ td.has-conflict::after { content: "⚠"; float: right; color: var(--conflict-bor
 /* Stats */
 .stats-row { display: flex; gap: 12px; margin-bottom: 16px; }
 .stat-card {
-  flex: 1; background: var(--card); border-radius: 14px;
+  flex: 1; min-width: 140px; background: var(--card); border-radius: 14px;
   padding: 16px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   border: 1px solid var(--border);
   position: relative; overflow: hidden;
@@ -460,6 +469,9 @@ body.edit-mode table.schedule td { position: relative; }
 /* Clickable teacher / class names */
 .click-link { cursor: pointer; text-decoration: none; }
 .click-link:hover { text-decoration: underline; text-decoration-color: var(--ip-cyan); }
+
+/* Section containers — always full width */
+[id^="section"] { width: 100%; box-sizing: border-box; }
 
 /* Today section */
 .today-greeting {
@@ -613,8 +625,7 @@ body.edit-mode table.schedule td { position: relative; }
   .user-role { display: none; }
   .user-chip { padding: 3px 6px 3px 3px; gap: 4px; }
 
-  /* Section nav: horizontal scroll, compact */
-  .section-nav-wrap { position: relative; }
+  /* Section nav: horizontal scroll on mobile, no wrap/collapse */
   .section-nav-wrap::after {
     content: '';
     position: absolute; top: 0; right: 0;
@@ -626,8 +637,11 @@ body.edit-mode table.schedule td { position: relative; }
   .section-nav {
     gap: 5px; overflow-x: auto; padding-bottom: 4px;
     flex-wrap: nowrap; scrollbar-width: none; margin-bottom: 8px;
+    max-height: none !important; overflow-y: visible !important;
   }
   .section-nav::-webkit-scrollbar { display: none; }
+  .section-nav.nav-collapsed { max-height: none !important; overflow: visible !important; }
+  .nav-toggle-btn { display: none !important; }
   .section-btn {
     padding: 7px 10px; font-size: 11px; font-weight: 600;
     white-space: nowrap; flex-shrink: 0; gap: 4px; border-radius: 8px;

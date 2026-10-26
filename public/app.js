@@ -1195,6 +1195,8 @@ async function confirmReplacements() {
 function setSection(s) {
   state.section = s;
   for (const b of document.querySelectorAll(".section-btn")) b.classList.toggle("active", b.dataset.section === s);
+  // If nav is collapsed and active tab might be on hidden row, auto-expand
+  _ensureActiveTabVisible();
   const map = {
     schedule: "sectionSchedule",
     teachers: "sectionTeachers",
@@ -1365,6 +1367,8 @@ function initUI() {
 
   // Apply saved tab visibility preferences
   applyTabVisibilityPrefs();
+  // Init collapsible nav (after tabs are shown/hidden by role)
+  initNavToggle();
 
   // Auto-apply stage for heads who manage a specific stage
   if (CURRENT_USER && CURRENT_USER.stage && CURRENT_USER.role === "head") {
@@ -1452,6 +1456,7 @@ function toggleTabPref(sect, show) {
   }
   saveHiddenTabs(hidden);
   applyTabVisibilityPrefs();
+  _updateNavToggleBtn();
 }
 
 function resetTabVisibility() {
@@ -1459,6 +1464,72 @@ function resetTabVisibility() {
   applyTabVisibilityPrefs();
   // Re-check all checkboxes
   document.querySelectorAll("#tabCustomizerList input[type=checkbox]").forEach(cb => cb.checked = true);
+}
+
+// ============= NAV EXPAND/COLLAPSE =============
+function _isNavRole() {
+  return CURRENT_USER && (CURRENT_USER.role === "head" || CURRENT_USER.role === "director");
+}
+
+function initNavToggle() {
+  const btn = document.getElementById("navToggleBtn");
+  const nav = document.querySelector(".section-nav");
+  if (!btn || !nav) return;
+  // Only show toggle for head/director (they have many tabs)
+  if (!_isNavRole()) { btn.style.display = "none"; nav.classList.remove("nav-collapsed"); return; }
+  btn.style.display = "";
+  const expanded = (() => { try { return localStorage.getItem("ip_nav_expanded") === "1"; } catch(e) { return false; } })();
+  if (expanded) { nav.classList.remove("nav-collapsed"); } else { nav.classList.add("nav-collapsed"); }
+  _updateNavToggleBtn();
+}
+
+function _updateNavToggleBtn() {
+  const btn = document.getElementById("navToggleBtn");
+  const nav = document.querySelector(".section-nav");
+  if (!btn || !nav) return;
+  const collapsed = nav.classList.contains("nav-collapsed");
+  if (collapsed) {
+    // Count visible tabs that are currently overflowing (not in first row)
+    // Simple: count visible .section-btn elements excluding the toggle itself
+    const allBtns = Array.from(nav.querySelectorAll(".section-btn:not(#navToggleBtn)")).filter(b => b.style.display !== "none");
+    // With 52px row height and ~6px gap, approx fit check: just show count of visible tabs > first row
+    btn.textContent = `Ещё ▾`;
+  } else {
+    btn.textContent = `Свернуть ▲`;
+  }
+}
+
+function _ensureActiveTabVisible() {
+  const nav = document.querySelector(".section-nav");
+  if (!nav || !nav.classList.contains("nav-collapsed")) return;
+  const activeBtn = nav.querySelector(".section-btn.active");
+  if (!activeBtn) return;
+  // Check if active button is clipped by collapsed height
+  const navRect = nav.getBoundingClientRect();
+  const btnRect = activeBtn.getBoundingClientRect();
+  // If button's bottom exceeds nav visible area, expand
+  if (btnRect.bottom > navRect.top + 56) {
+    nav.classList.remove("nav-collapsed");
+    try { localStorage.setItem("ip_nav_expanded", "1"); } catch(e) {}
+    _updateNavToggleBtn();
+  }
+}
+
+function toggleNavExpand() {
+  const nav = document.querySelector(".section-nav");
+  if (!nav) return;
+  const nowCollapsed = nav.classList.contains("nav-collapsed");
+  if (nowCollapsed) {
+    nav.classList.remove("nav-collapsed");
+    try { localStorage.setItem("ip_nav_expanded", "1"); } catch(e) {}
+  } else {
+    nav.classList.add("nav-collapsed");
+    try { localStorage.setItem("ip_nav_expanded", "0"); } catch(e) {}
+  }
+  _updateNavToggleBtn();
+  // If active tab is now hidden (collapsed), scroll nav so it's visible
+  const activeBtn = nav.querySelector(".section-btn.active");
+  if (activeBtn) activeBtn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
 }
 
 // ============= PWA + PUSH =============
