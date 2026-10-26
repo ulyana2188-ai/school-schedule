@@ -5360,43 +5360,98 @@ async function renderStats_section() {
   const root = document.getElementById("sectionStats");
   if (!root) return;
 
-  // Get depts for the current head
-  const depts = (CURRENT_USER.depts && CURRENT_USER.depts.length > 0) ? CURRENT_USER.depts : [CURRENT_USER.dept];
-  const deptOpts = depts.map(d => `<option value="${d}">${d}</option>`).join("");
+  // All departments available school-wide
+  const allDeptOpts = DEPTS.map(d => `<option value="${d}">${d}</option>`).join("");
 
   root.innerHTML = `
-    <div style="padding:16px;">
-      <h2 style="margin:0 0 16px;font-size:1.2rem;">📊 Статистика</h2>
+    <div class="today-greeting">
+      <h2>📊 Аналитика</h2>
+      <div class="day-of-week">Статистика по всей школе</div>
+    </div>
 
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">Отделение
-          <select id="statsDepFilter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
-            <option value="">Все</option>${deptOpts}
-          </select>
-        </label>
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">С даты
-          <input type="date" id="statsFrom" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
-        </label>
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">По дату
-          <input type="date" id="statsTo" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
-        </label>
-        <button class="btn" onclick="loadStatsData()" style="margin-bottom:0;">Применить</button>
-      </div>
+    <div id="statsSummaryTiles"></div>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
-        <button class="btn secondary" onclick="downloadWorkloadXlsx()">📥 Нагрузка (Excel)</button>
-        <button class="btn secondary" onclick="downloadReplacementsXlsx()">📥 Замены (Excel)</button>
-        <button class="btn secondary" onclick="loadRoomConflicts()">🏫 Конфликты кабинетов</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 14px;align-items:flex-end;">
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;">Отделение
+        <select id="statsDepFilter" onchange="loadStatsData()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg,var(--card));color:var(--text);font-size:13px;min-width:140px;">
+          <option value="">Все отделения</option>${allDeptOpts}
+        </select>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;">С даты
+        <input type="date" id="statsFrom" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg,var(--card));color:var(--text);font-size:13px;">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;">По дату
+        <input type="date" id="statsTo" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg,var(--card));color:var(--text);font-size:13px;">
+      </label>
+      <button class="btn" onclick="loadStatsData()">Применить</button>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="downloadWorkloadXlsx()">📥 Нагрузка</button>
+        <button class="btn btn-secondary" onclick="downloadReplacementsXlsx()">📥 Замены</button>
+        <button class="btn btn-secondary" onclick="loadRoomConflicts()">🏫 Кабинеты</button>
       </div>
+    </div>
 
-      <div id="statsContent">
-        <div id="statsWorkload"></div>
-        <div id="statsReplacements" style="margin-top:24px;"></div>
-        <div id="statsRoomConflicts" style="margin-top:24px;"></div>
-      </div>
+    <div id="statsContent">
+      <div id="statsDeptCards"></div>
+      <div id="statsWorkload" style="margin-top:20px;"></div>
+      <div id="statsReplacements" style="margin-top:24px;"></div>
+      <div id="statsRoomConflicts" style="margin-top:24px;"></div>
     </div>`;
 
+  renderStatsSummaryTiles();
   loadStatsData();
+}
+
+function renderStatsSummaryTiles() {
+  const root = document.getElementById("statsSummaryTiles");
+  if (!root) return;
+  // Compute from local schedule data (fast, no API)
+  const uniqueTeachers = new Set();
+  let totalLessons = 0;
+  const deptLessons = {};
+  const deptTeachers = {};
+  for (const dept of DEPTS) {
+    if (!DATA[dept]) continue;
+    const sched = DATA[dept].schedule;
+    const tset = new Set();
+    let deptCount = 0;
+    for (const day in sched) {
+      for (const lkey in sched[day]) {
+        for (const cls in sched[day][lkey].classes) {
+          const info = sched[day][lkey].classes[cls];
+          const items = info.groups ? info.groups : [info];
+          for (const it of items) {
+            if (it.teacher) { uniqueTeachers.add(it.teacher); tset.add(it.teacher); }
+          }
+          deptCount++;
+        }
+      }
+    }
+    deptLessons[dept] = deptCount;
+    deptTeachers[dept] = tset.size;
+    totalLessons += deptCount;
+  }
+  const totalReplacements = ALL_REPLACEMENTS.length;
+  const openConflicts = CONFLICTS.length;
+
+  root.innerHTML = `<div class="stats-row" style="margin-top:16px;">
+    <div class="stat-card cyan"><div class="label">👩‍🏫 Учителей в школе</div><div class="value">${uniqueTeachers.size}</div></div>
+    <div class="stat-card magenta"><div class="label">📚 Уроков в неделю</div><div class="value">${totalLessons}</div></div>
+    <div class="stat-card"><div class="label">🔄 Замен всего</div><div class="value">${totalReplacements}</div></div>
+    <div class="stat-card ${openConflicts > 0 ? 'red' : ''}"><div class="label">⚠️ Конфликтов</div><div class="value">${openConflicts}</div></div>
+  </div>
+  <div id="statsDeptMiniCards" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+    ${DEPTS.map(d => {
+      if (!DATA[d]) return '';
+      const lessons = deptLessons[d] || 0;
+      const teachers = deptTeachers[d] || 0;
+      return `<div style="flex:1;min-width:130px;background:var(--card-bg,var(--card));border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer;" onclick="document.getElementById('statsDepFilter').value='${escapeHtml(d)}';loadStatsData()">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${escapeHtml(d)}</div>
+        <div style="font-size:12px;color:var(--text-muted);">${teachers} учителей</div>
+        <div style="font-size:12px;color:var(--text-muted);">${lessons} уроков/нед</div>
+      </div>`;
+    }).join("")}
+  </div>`;
 }
 
 async function loadStatsData() {
@@ -5423,26 +5478,45 @@ function renderWorkloadTable(workload) {
   if (!root) return;
   if (!workload.length) { root.innerHTML = `<p style="color:#888;font-size:13px;">Данных о нагрузке нет</p>`; return; }
 
-  const rows = workload.slice(0, 60).map(t => `
-    <tr>
-      <td>${escapeHtml(t.name)}</td>
-      <td style="text-align:center;font-weight:600;">${t.lessons_per_week}</td>
-      <td style="color:#666;font-size:12px;">${t.subjects.slice(0,3).join(", ")}${t.subjects.length > 3 ? "…" : ""}</td>
-      <td style="color:#666;font-size:12px;">${t.classes.slice(0,6).join(", ")}${t.classes.length > 6 ? "…" : ""}</td>
-      <td style="color:#666;font-size:12px;">${t.depts.join(", ")}</td>
-    </tr>`).join("");
+  const sorted = workload.slice().sort((a, b) => b.lessons_per_week - a.lessons_per_week);
+  const maxLessons = sorted[0]?.lessons_per_week || 1;
+  const shown = sorted.slice(0, 60);
+
+  const rows = shown.map((t, i) => {
+    const barPct = Math.round((t.lessons_per_week / maxLessons) * 100);
+    const loadColor = t.lessons_per_week >= maxLessons * 0.8 ? '#ef4444'
+      : t.lessons_per_week >= maxLessons * 0.5 ? 'var(--ip-blue)'
+      : '#94a3b8';
+    return `<tr style="${i % 2 === 0 ? '' : 'background:var(--surface2,rgba(0,0,0,.02));'}">
+      <td style="padding:8px 10px;font-weight:500;">${escapeHtml(t.name)}</td>
+      <td style="padding:8px 10px;min-width:120px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div style="width:${barPct}%;height:100%;background:${loadColor};border-radius:3px;transition:width .3s;"></div>
+          </div>
+          <span style="font-weight:700;font-size:13px;color:${loadColor};min-width:24px;text-align:right;">${t.lessons_per_week}</span>
+        </div>
+      </td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--text-muted);">${t.subjects.slice(0,3).join(", ")}${t.subjects.length > 3 ? "…" : ""}</td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--text-muted);">${t.classes.slice(0,5).join(", ")}${t.classes.length > 5 ? "…" : ""}</td>
+      <td style="padding:8px 10px;font-size:12px;color:var(--text-muted);">${t.depts.join(", ")}</td>
+    </tr>`;
+  }).join("");
 
   root.innerHTML = `
-    <h3 style="font-size:1rem;margin:0 0 10px;">📋 Нагрузка учителей (уроков в неделю)</h3>
-    <div style="overflow-x:auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <h3 style="font-size:1rem;margin:0;">📋 Нагрузка учителей</h3>
+      <span style="font-size:12px;color:var(--text-muted);background:var(--surface2,#f3f4f6);padding:2px 8px;border-radius:10px;">${workload.length} учителей · сортировка по убыванию</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="background:var(--surface2,#f3f4f6);">
-            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Учитель</th>
-            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);">Уроков</th>
-            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Предметы</th>
-            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Классы</th>
-            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Отделения</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Учитель</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);min-width:160px;">Нагрузка (ур/нед)</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Предметы</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Классы</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Отделения</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -5456,22 +5530,46 @@ function renderReplacementsTable(rows) {
   if (!root) return;
   if (!rows.length) { root.innerHTML = `<p style="color:#888;font-size:13px;">Замен за выбранный период нет</p>`; return; }
 
-  const tableRows = rows.slice(0, 50).map(r => `
-    <tr>
-      <td>${escapeHtml(r.teacher_name)}</td>
-      <td style="text-align:center;color:#ef4444;font-weight:600;">${r.absent_count}</td>
-      <td style="text-align:center;color:#22c55e;font-weight:600;">${r.replacement_count}</td>
-    </tr>`).join("");
+  const sorted = rows.slice().sort((a, b) => (b.absent_count + b.replacement_count) - (a.absent_count + a.replacement_count));
+  const maxAbsent = Math.max(...sorted.map(r => r.absent_count), 1);
+  const maxRep = Math.max(...sorted.map(r => r.replacement_count), 1);
+
+  const tableRows = sorted.slice(0, 50).map((r, i) => {
+    const absPct = Math.round((r.absent_count / maxAbsent) * 100);
+    const repPct = Math.round((r.replacement_count / maxRep) * 100);
+    return `<tr style="${i % 2 === 0 ? '' : 'background:var(--surface2,rgba(0,0,0,.02));'}">
+      <td style="padding:8px 10px;font-weight:500;">${escapeHtml(r.teacher_name)}</td>
+      <td style="padding:8px 10px;min-width:120px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div style="width:${absPct}%;height:100%;background:#ef4444;border-radius:3px;"></div>
+          </div>
+          <span style="font-weight:700;color:#ef4444;min-width:20px;text-align:right;font-size:13px;">${r.absent_count}</span>
+        </div>
+      </td>
+      <td style="padding:8px 10px;min-width:120px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div style="width:${repPct}%;height:100%;background:#10b981;border-radius:3px;"></div>
+          </div>
+          <span style="font-weight:700;color:#10b981;min-width:20px;text-align:right;font-size:13px;">${r.replacement_count}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
 
   root.innerHTML = `
-    <h3 style="font-size:1rem;margin:0 0 10px;">🔄 Замены по учителям</h3>
-    <div style="overflow-x:auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <h3 style="font-size:1rem;margin:0;">🔄 Замены по учителям</h3>
+      <span style="font-size:12px;color:var(--text-muted);background:var(--surface2,#f3f4f6);padding:2px 8px;border-radius:10px;">сортировка по активности</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="background:var(--surface2,#f3f4f6);">
-            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Учитель</th>
-            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);">Отсутствовал</th>
-            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);">Заменял</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Учитель</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Отсутствовал 🔴</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);">Заменял 🟢</th>
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
