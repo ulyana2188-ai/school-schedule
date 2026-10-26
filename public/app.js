@@ -151,6 +151,13 @@ function escapeHtml(s) {
   if (s == null) return "";
   return String(s).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch]);
 }
+function pluralLesson(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return "уроков";
+  if (mod10 === 1) return "урок";
+  if (mod10 >= 2 && mod10 <= 4) return "урока";
+  return "уроков";
+}
 function getInitials(name) {
   const parts = (name || "").trim().split(/\s+/);
   return ((parts[0] || "")[0] || "?").toUpperCase();
@@ -1209,6 +1216,9 @@ function initUI() {
     if (absTab) absTab.style.display = "none";
     const histTab2 = document.getElementById("historyTab");
     if (histTab2) histTab2.style.display = "none";
+    // Hide teacher count badge — not meaningful for teachers
+    const tCount = document.getElementById("teachersCount");
+    if (tCount) tCount.style.display = "none";
   }
 
   setSection("today"); // default
@@ -1367,7 +1377,7 @@ function renderToday() {
     if (lessons.length === 0) {
       html += `<div class="today-list"><div class="history-empty">Сегодня у вас нет уроков 🎉</div></div>`;
     } else {
-      html += `<div style="font-size:13px;color:var(--text-muted);margin:6px 4px;">У вас сегодня <b>${lessons.length}</b> уроков</div>`;
+      html += `<div style="font-size:13px;color:var(--text-muted);margin:6px 4px;">У вас сегодня <b>${lessons.length}</b> ${pluralLesson(lessons.length)}</div>`;
       html += `<div class="today-list">`;
       for (const L of lessons) {
         const status = lessonTimeStatus(L.time);
@@ -2782,7 +2792,7 @@ function renderMy() {
     if (lessons.length === 0) {
       html += `<div class="today-list"><div class="history-empty">${day === today ? "Сегодня" : day} у вас нет уроков 🎉</div></div>`;
     } else {
-      html += `<div style="font-size:13px;color:var(--text-muted);margin:6px 4px;"><b>${day}</b> · ${lessons.length} уроков</div>`;
+      html += `<div style="font-size:13px;color:var(--text-muted);margin:6px 4px;"><b>${day}</b> · ${lessons.length} ${pluralLesson(lessons.length)}</div>`;
       html += `<div class="today-list">`;
       for (const L of lessons) {
         const status = (view === "today") ? lessonTimeStatus(L.time) : "future";

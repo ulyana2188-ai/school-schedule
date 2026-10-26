@@ -552,6 +552,15 @@ body.edit-mode table.schedule td { position: relative; }
   .user-chip { padding: 3px 6px 3px 3px; gap: 4px; }
 
   /* Section nav: horizontal scroll, compact */
+  .section-nav-wrap { position: relative; }
+  .section-nav-wrap::after {
+    content: '';
+    position: absolute; top: 0; right: 0;
+    width: 32px; height: 100%;
+    background: linear-gradient(to right, transparent, var(--bg));
+    pointer-events: none;
+    border-radius: 0 8px 8px 0;
+  }
   .section-nav {
     gap: 5px; overflow-x: auto; padding-bottom: 4px;
     flex-wrap: nowrap; scrollbar-width: none; margin-bottom: 8px;
