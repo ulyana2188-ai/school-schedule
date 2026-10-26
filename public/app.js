@@ -1100,6 +1100,8 @@ function setSection(s) {
     generator: "sectionGenerator",
     chat: "sectionChat",
     absreq: "sectionAbsReq",
+    stats: "sectionStats",
+    availability: "sectionAvailability",
   };
   for (const k in map) {
     const el = document.getElementById(map[k]);
@@ -1117,6 +1119,8 @@ function setSection(s) {
   if (s === "generator") renderGenerator();
   if (s === "chat") renderChat();
   if (s === "absreq") renderAbsReq();
+  if (s === "stats") renderStats_section();
+  if (s === "availability") renderAvailability();
 }
 function populateClassFilter() {
   const sel = document.getElementById("classFilter");
@@ -1172,6 +1176,8 @@ function initUI() {
     if (impBtn) impBtn.style.display = "";
     // Show import banner if there are overrides
     updateImportBanner();
+    const statsTab = document.getElementById("statsTab");
+    if (statsTab) statsTab.style.display = "";
   } else {
     document.getElementById("adminTab").style.display = "none";
     document.getElementById("editModeBtn").style.display = "none";
@@ -4992,4 +4998,363 @@ function exportSchedulePDF() {
   ${tableHtml}
 </body></html>`);
   win.document.close();
+}
+
+// ============================================================
+// STATISTICS SECTION
+// ============================================================
+
+async function renderStats_section() {
+  const root = document.getElementById("sectionStats");
+  if (!root) return;
+
+  // Get depts for the current head
+  const depts = (CURRENT_USER.depts && CURRENT_USER.depts.length > 0) ? CURRENT_USER.depts : [CURRENT_USER.dept];
+  const deptOpts = depts.map(d => `<option value="${d}">${d}</option>`).join("");
+
+  root.innerHTML = `
+    <div style="padding:16px;">
+      <h2 style="margin:0 0 16px;font-size:1.2rem;">📊 Статистика</h2>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">Отделение
+          <select id="statsDepFilter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
+            <option value="">Все</option>${deptOpts}
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">С даты
+          <input type="date" id="statsFrom" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">По дату
+          <input type="date" id="statsTo" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
+        </label>
+        <button class="btn" onclick="loadStatsData()" style="margin-bottom:0;">Применить</button>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+        <button class="btn secondary" onclick="downloadWorkloadXlsx()">📥 Нагрузка (Excel)</button>
+        <button class="btn secondary" onclick="downloadReplacementsXlsx()">📥 Замены (Excel)</button>
+        <button class="btn secondary" onclick="loadRoomConflicts()">🏫 Конфликты кабинетов</button>
+      </div>
+
+      <div id="statsContent">
+        <div id="statsWorkload"></div>
+        <div id="statsReplacements" style="margin-top:24px;"></div>
+        <div id="statsRoomConflicts" style="margin-top:24px;"></div>
+      </div>
+    </div>`;
+
+  loadStatsData();
+}
+
+async function loadStatsData() {
+  const dept = document.getElementById("statsDepFilter")?.value || "";
+  const from = document.getElementById("statsFrom")?.value || "";
+  const to = document.getElementById("statsTo")?.value || "";
+  const qs = new URLSearchParams();
+  if (dept) qs.set("dept", dept);
+  if (from) qs.set("from_date", from);
+  if (to) qs.set("to_date", to);
+
+  // Load workload + replacements in parallel
+  const [wl, repl] = await Promise.all([
+    apiFetch(`/api/stats/workload?${qs.toString()}`),
+    apiFetch(`/api/stats/replacements?${qs.toString()}&group_by=teacher`),
+  ]);
+
+  renderWorkloadTable(wl?.workload || []);
+  renderReplacementsTable(repl?.rows || []);
+}
+
+function renderWorkloadTable(workload) {
+  const root = document.getElementById("statsWorkload");
+  if (!root) return;
+  if (!workload.length) { root.innerHTML = `<p style="color:#888;font-size:13px;">Данных о нагрузке нет</p>`; return; }
+
+  const rows = workload.slice(0, 60).map(t => `
+    <tr>
+      <td>${escapeHtml(t.name)}</td>
+      <td style="text-align:center;font-weight:600;">${t.lessons_per_week}</td>
+      <td style="color:#666;font-size:12px;">${t.subjects.slice(0,3).join(", ")}${t.subjects.length > 3 ? "…" : ""}</td>
+      <td style="color:#666;font-size:12px;">${t.classes.slice(0,6).join(", ")}${t.classes.length > 6 ? "…" : ""}</td>
+      <td style="color:#666;font-size:12px;">${t.depts.join(", ")}</td>
+    </tr>`).join("");
+
+  root.innerHTML = `
+    <h3 style="font-size:1rem;margin:0 0 10px;">📋 Нагрузка учителей (уроков в неделю)</h3>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--surface2,#f3f4f6);">
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Учитель</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);">Уроков</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Предметы</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Классы</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Отделения</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${workload.length > 60 ? `<p style="font-size:12px;color:#888;margin-top:6px;">Показано 60 из ${workload.length}. Скачайте Excel для полного списка.</p>` : ""}`;
+}
+
+function renderReplacementsTable(rows) {
+  const root = document.getElementById("statsReplacements");
+  if (!root) return;
+  if (!rows.length) { root.innerHTML = `<p style="color:#888;font-size:13px;">Замен за выбранный период нет</p>`; return; }
+
+  const tableRows = rows.slice(0, 50).map(r => `
+    <tr>
+      <td>${escapeHtml(r.teacher_name)}</td>
+      <td style="text-align:center;color:#ef4444;font-weight:600;">${r.absent_count}</td>
+      <td style="text-align:center;color:#22c55e;font-weight:600;">${r.replacement_count}</td>
+    </tr>`).join("");
+
+  root.innerHTML = `
+    <h3 style="font-size:1rem;margin:0 0 10px;">🔄 Замены по учителям</h3>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:var(--surface2,#f3f4f6);">
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);">Учитель</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);">Отсутствовал</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--border);">Заменял</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function loadRoomConflicts() {
+  const dept = document.getElementById("statsDepFilter")?.value || "";
+  const qs = new URLSearchParams();
+  if (dept) qs.set("dept", dept);
+  const root = document.getElementById("statsRoomConflicts");
+  if (!root) return;
+  root.innerHTML = `<p style="color:#888;font-size:13px;">Проверяю конфликты кабинетов…</p>`;
+
+  const data = await apiFetch(`/api/schedule/room-conflicts?${qs.toString()}`);
+  if (!data) { root.innerHTML = `<p style="color:#ef4444;">Ошибка загрузки</p>`; return; }
+
+  if (!data.conflicts.length) {
+    root.innerHTML = `<div style="padding:12px;background:rgba(34,197,94,.1);border-radius:8px;color:#166534;font-size:13px;">✅ Конфликтов кабинетов не обнаружено</div>`;
+    return;
+  }
+
+  const rows = data.conflicts.map(c => {
+    const slotList = c.slots.map(s => `${s.dept} ${s.cls} кл — ${escapeHtml(s.subject||"—")} (${escapeHtml(s.teacher||"—")})`).join("<br>");
+    return `<tr>
+      <td style="padding:8px 10px;">${escapeHtml(c.day)}</td>
+      <td style="padding:8px 10px;text-align:center;">Урок ${c.lesson_no}</td>
+      <td style="padding:8px 10px;font-weight:600;">Каб. ${escapeHtml(c.room)}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#666;">${slotList}</td>
+    </tr>`;
+  }).join("");
+
+  root.innerHTML = `
+    <h3 style="font-size:1rem;margin:0 0 10px;color:#ef4444;">🏫 Конфликты кабинетов (${data.total})</h3>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:rgba(239,68,68,.08);">
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fca5a5;">День</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #fca5a5;">Урок</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fca5a5;">Кабинет</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fca5a5;">Пересечения</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function downloadWorkloadXlsx() {
+  const dept = document.getElementById("statsDepFilter")?.value || "";
+  const qs = new URLSearchParams();
+  if (dept) qs.set("dept", dept);
+  const token = localStorage.getItem("ip_token") || "";
+  // Use fetch + blob download
+  fetch(`/api/stats/workload/xlsx?${qs.toString()}`, { headers: { Authorization: "Bearer " + token } })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `workload-${new Date().toISOString().slice(0,10)}.xlsx`;
+      a.click();
+    });
+}
+
+function downloadReplacementsXlsx() {
+  const dept = document.getElementById("statsDepFilter")?.value || "";
+  const from = document.getElementById("statsFrom")?.value || "";
+  const to = document.getElementById("statsTo")?.value || "";
+  const qs = new URLSearchParams();
+  if (dept) qs.set("dept", dept);
+  if (from) qs.set("from_date", from);
+  if (to) qs.set("to_date", to);
+  const token = localStorage.getItem("ip_token") || "";
+  fetch(`/api/stats/replacements/xlsx?${qs.toString()}`, { headers: { Authorization: "Bearer " + token } })
+    .then(r => r.blob())
+    .then(blob => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `replacements-${new Date().toISOString().slice(0,10)}.xlsx`;
+      a.click();
+    });
+}
+
+// ============================================================
+// TEACHER AVAILABILITY UI
+// ============================================================
+
+const AVAIL_DAYS = ["Понедельник","Вторник","Среда","Четверг","Пятница"];
+const AVAIL_LESSONS = [
+  {no:1, time:"8:10–8:55"}, {no:2, time:"9:05–9:50"}, {no:3, time:"10:05–10:50"},
+  {no:4, time:"11:00–11:45"}, {no:5, time:"12:10–12:55"}, {no:6, time:"13:05–13:50"},
+  {no:7, time:"14:00–14:45"}, {no:8, time:"15:00–15:45"}, {no:9, time:"16:00–16:45"},
+];
+
+let _availData = {}; // key "day|no" -> {available, note}
+let _availTeacherId = null;
+let _availDept = null;
+
+async function renderAvailability() {
+  const root = document.getElementById("sectionAvailability");
+  if (!root) return;
+
+  const isHead = CURRENT_USER && CURRENT_USER.role === "head";
+  const teachersList = isHead ? Object.keys(ALL_TEACHERS || {}) : null;
+
+  // Default: own availability
+  _availTeacherId = CURRENT_USER.id;
+  _availDept = CURRENT_USER.dept || (CURRENT_USER.depts && CURRENT_USER.depts[0]) || null;
+
+  let teacherSelector = "";
+  if (isHead && teachersList && teachersList.length > 0) {
+    const opts = teachersList.sort().map(n => `<option value="${n}">${n}</option>`).join("");
+    teacherSelector = `
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;">Учитель
+        <select id="availTeacherSel" onchange="loadAvailForTeacher(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">
+          ${opts}
+        </select>
+      </label>`;
+  }
+
+  root.innerHTML = `
+    <div style="padding:16px;">
+      <h2 style="margin:0 0 4px;font-size:1.2rem;">🗓 Доступность для замен</h2>
+      <p style="margin:0 0 16px;color:#888;font-size:13px;">Отметьте слоты, когда учитель <strong>НЕ доступен</strong> для замены. Зелёный = доступен, красный = не доступен.</p>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
+        ${teacherSelector}
+        <button class="btn" onclick="saveAvailability()">💾 Сохранить</button>
+      </div>
+
+      <div id="availGrid" style="overflow-x:auto;"></div>
+      <p id="availSaveMsg" style="display:none;color:#22c55e;font-size:13px;margin-top:8px;">✅ Сохранено!</p>
+    </div>`;
+
+  await loadAvailData(_availTeacherId, _availDept);
+  renderAvailGrid();
+}
+
+async function loadAvailForTeacher(name) {
+  // Find teacher id by name
+  const u = Object.values(ALL_TEACHERS || {}).find ? null : null;
+  // Use accounts list
+  const accounts = await apiFetch("/api/accounts");
+  const teacher = (accounts?.accounts || []).find(a => a.name === name);
+  if (teacher) {
+    _availTeacherId = teacher.id;
+    _availDept = teacher.dept || (teacher.depts && teacher.depts[0]) || null;
+    await loadAvailData(_availTeacherId, _availDept);
+    renderAvailGrid();
+  }
+}
+
+async function loadAvailData(teacherId, dept) {
+  const qs = new URLSearchParams({ teacher_id: teacherId });
+  if (dept) qs.set("dept", dept);
+  const data = await apiFetch(`/api/availability?${qs.toString()}`);
+  _availData = {};
+  for (const slot of (data?.availability || [])) {
+    _availData[`${slot.day_of_week}|${slot.lesson_no}`] = { available: slot.available, note: slot.note || "" };
+  }
+}
+
+function renderAvailGrid() {
+  const grid = document.getElementById("availGrid");
+  if (!grid) return;
+
+  let html = `<table style="border-collapse:collapse;font-size:13px;min-width:500px;">
+    <thead>
+      <tr>
+        <th style="padding:8px 10px;border:1px solid var(--border);background:var(--surface2,#f3f4f6);white-space:nowrap;">Урок / Время</th>
+        ${AVAIL_DAYS.map(d => `<th style="padding:8px 10px;border:1px solid var(--border);background:var(--surface2,#f3f4f6);">${d}</th>`).join("")}
+      </tr>
+    </thead>
+    <tbody>`;
+
+  for (const lesson of AVAIL_LESSONS) {
+    html += `<tr>
+      <td style="padding:6px 10px;border:1px solid var(--border);white-space:nowrap;font-size:12px;color:#666;background:var(--surface2,#f3f4f6);">
+        <strong>${lesson.no}</strong> <span style="font-size:11px;">${lesson.time}</span>
+      </td>`;
+    for (const day of AVAIL_DAYS) {
+      const key = `${day}|${lesson.no}`;
+      const slot = _availData[key];
+      // Default: available = true (not marked unavailable)
+      const isUnavailable = slot && slot.available === false;
+      const bg = isUnavailable ? "rgba(239,68,68,.12)" : "rgba(34,197,94,.08)";
+      const icon = isUnavailable ? "🔴" : "🟢";
+      html += `<td style="padding:4px;border:1px solid var(--border);text-align:center;cursor:pointer;background:${bg};"
+               onclick="toggleAvailSlot('${day}',${lesson.no})" id="avail-${day.replace(/\s/g,'_')}-${lesson.no}">
+               <span style="font-size:18px;">${icon}</span></td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  grid.innerHTML = html;
+}
+
+function toggleAvailSlot(day, lessonNo) {
+  const key = `${day}|${lessonNo}`;
+  const cur = _availData[key];
+  // Toggle: if currently available (or unset) -> mark unavailable; if unavailable -> mark available
+  const wasUnavailable = cur && cur.available === false;
+  _availData[key] = { available: wasUnavailable, note: cur?.note || "" };
+
+  // Update cell visually
+  const cell = document.getElementById(`avail-${day.replace(/\s/g,'_')}-${lessonNo}`);
+  if (cell) {
+    const nowUnavailable = !wasUnavailable;
+    cell.style.background = nowUnavailable ? "rgba(239,68,68,.12)" : "rgba(34,197,94,.08)";
+    cell.innerHTML = `<span style="font-size:18px;">${nowUnavailable ? "🔴" : "🟢"}</span>`;
+  }
+}
+
+async function saveAvailability() {
+  const slots = [];
+  for (const day of AVAIL_DAYS) {
+    for (const lesson of AVAIL_LESSONS) {
+      const key = `${day}|${lesson.no}`;
+      const slot = _availData[key];
+      slots.push({
+        day_of_week: day,
+        lesson_no: lesson.no,
+        available: slot ? (slot.available !== false) : true,
+        note: slot?.note || null,
+      });
+    }
+  }
+
+  const body = { teacher_id: _availTeacherId, dept: _availDept, slots };
+  const r = await apiFetch("/api/availability", { method: "POST", body: JSON.stringify(body) });
+  const msg = document.getElementById("availSaveMsg");
+  if (msg) {
+    msg.style.display = "";
+    setTimeout(() => { msg.style.display = "none"; }, 2500);
+  }
 }

@@ -162,6 +162,12 @@
     <button class="section-btn" data-section="chat" id="chatTab" style="display:none;" onclick="setSection('chat')">
       💬 Чат <span id="chatUnreadBadge" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:3px"></span>
     </button>
+    <button class="section-btn" data-section="stats" id="statsTab" style="display:none;" onclick="setSection('stats')">
+      📊 Статистика
+    </button>
+    <button class="section-btn" data-section="availability" id="availabilityTab" onclick="setSection('availability')">
+      🗓 Доступность
+    </button>
   </div>
 
   <!-- TODAY SECTION -->
@@ -193,6 +199,12 @@
 
   <!-- CHAT SECTION -->
   <div id="sectionChat" style="display:none;padding:0;"></div>
+
+  <!-- STATS SECTION -->
+  <div id="sectionStats" style="display:none;"></div>
+
+  <!-- AVAILABILITY SECTION -->
+  <div id="sectionAvailability" style="display:none;"></div>
 
   <!-- SCHEDULE SECTION -->
   <div id="sectionSchedule">

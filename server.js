@@ -1701,6 +1701,332 @@ app.get("/api/chat/unread", authMiddleware, async (req, res) => {
   res.json({ unread: total });
 });
 
+// ============================================================
+// STATISTICS & REPORTS
+// ============================================================
+
+// GET /api/stats/replacements — replacement count by dept/teacher/period
+// Query params: dept, from_date, to_date, group_by (dept|teacher|day)
+app.get("/api/stats/replacements", authMiddleware, requireHead, async (req, res) => {
+  const { dept, from_date, to_date, group_by } = req.query;
+  const params = [];
+  const conditions = [];
+
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  if (dept) {
+    if (!allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
+    params.push(dept);
+    conditions.push(`r.dept=$${params.length}`);
+  } else {
+    params.push(allowedDepts);
+    conditions.push(`r.dept=ANY($${params.length})`);
+  }
+  if (from_date) { params.push(from_date); conditions.push(`r.created_at::date >= $${params.length}`); }
+  if (to_date)   { params.push(to_date);   conditions.push(`r.created_at::date <= $${params.length}`); }
+  const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+
+  let rows;
+  if (group_by === "teacher") {
+    const r = await db.query(`
+      SELECT u.name as teacher_name, u.id as teacher_id,
+             COUNT(*) FILTER (WHERE r.absent_user_id=u.id) as absent_count,
+             COUNT(*) FILTER (WHERE r.replacement_user_id=u.id) as replacement_count
+      FROM replacements r
+      JOIN users u ON u.id=r.absent_user_id OR u.id=r.replacement_user_id
+      ${where}
+      GROUP BY u.id, u.name ORDER BY absent_count DESC`, params);
+    rows = r.rows;
+  } else if (group_by === "day") {
+    const r = await db.query(`
+      SELECT r.day, COUNT(*) as count, r.dept
+      FROM replacements r ${where}
+      GROUP BY r.day, r.dept ORDER BY r.dept, r.day`, params);
+    rows = r.rows;
+  } else {
+    // group by dept (default)
+    const r = await db.query(`
+      SELECT r.dept, COUNT(*) as total,
+             COUNT(DISTINCT r.absent_user_id) as absent_teachers,
+             COUNT(DISTINCT r.day) as days_with_replacements
+      FROM replacements r ${where}
+      GROUP BY r.dept ORDER BY total DESC`, params);
+    rows = r.rows;
+  }
+  res.json({ rows });
+});
+
+// GET /api/stats/workload — teacher lesson count per week from schedule
+// Returns per-teacher lesson count computed from current schedule (static + edits)
+app.get("/api/stats/workload", authMiddleware, requireHead, async (req, res) => {
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const { dept } = req.query;
+  if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
+  const depts = dept ? [dept] : allowedDepts;
+
+  // Build merged schedule (same logic as /api/schedule)
+  const sched = JSON.parse(JSON.stringify(SCHEDULE));
+  try {
+    const ovr = await db.query("SELECT dept, data FROM schedule_overrides");
+    for (const row of ovr.rows) sched[row.dept] = row.data;
+    const edits = await db.query("SELECT * FROM schedule_edits");
+    for (const ed of edits.rows) {
+      if (!sched[ed.dept]) continue;
+      const days = sched[ed.dept].schedule;
+      if (!days[ed.day]) days[ed.day] = {};
+      let lesson = days[ed.day][ed.lesson_key];
+      if (!lesson) { lesson = { lesson_no: ed.lesson_no, time: ed.time, classes: {} }; days[ed.day][ed.lesson_key] = lesson; }
+      if (ed.cleared) { delete lesson.classes[ed.cls]; continue; }
+      const cellInfo = {};
+      if (ed.groups) cellInfo.groups = ed.groups;
+      else { cellInfo.subject = ed.subject; cellInfo.teacher = ed.teacher; }
+      cellInfo.room = ed.room;
+      lesson.classes[ed.cls] = cellInfo;
+    }
+  } catch (e) {}
+
+  // Count lessons per teacher
+  const teacherLoad = {}; // name -> { lessons_per_week, subjects: Set, classes: Set, depts: Set }
+  for (const deptName of depts) {
+    if (!sched[deptName]) continue;
+    const days = sched[deptName].schedule || {};
+    for (const day of Object.values(days)) {
+      for (const ldata of Object.values(day)) {
+        for (const cls of Object.keys(ldata.classes || {})) {
+          const cell = ldata.classes[cls];
+          const items = cell.groups ? cell.groups : [cell];
+          for (const item of items) {
+            if (!item.teacher) continue;
+            if (!teacherLoad[item.teacher]) {
+              teacherLoad[item.teacher] = { name: item.teacher, lessons_per_week: 0, subjects: new Set(), classes: new Set(), depts: new Set() };
+            }
+            const t = teacherLoad[item.teacher];
+            t.lessons_per_week++;
+            if (item.subject) t.subjects.add(item.subject);
+            t.classes.add(cls);
+            t.depts.add(deptName);
+          }
+        }
+      }
+    }
+  }
+
+  // Join with user data
+  const users = await db.query("SELECT id, name, dept FROM users WHERE role='teacher' AND COALESCE(is_active, TRUE)=TRUE");
+  const userMap = {};
+  for (const u of users.rows) userMap[u.name] = u;
+
+  const result = Object.values(teacherLoad).map(t => ({
+    name: t.name,
+    teacher_id: userMap[t.name]?.id || null,
+    lessons_per_week: t.lessons_per_week,
+    subjects: Array.from(t.subjects),
+    classes: Array.from(t.classes).sort(),
+    depts: Array.from(t.depts),
+  })).sort((a, b) => b.lessons_per_week - a.lessons_per_week);
+
+  res.json({ workload: result });
+});
+
+// GET /api/stats/workload/xlsx — download workload as Excel
+app.get("/api/stats/workload/xlsx", authMiddleware, requireHead, async (req, res) => {
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const { dept } = req.query;
+  if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
+  const depts = dept ? [dept] : allowedDepts;
+
+  // Same workload computation (inline)
+  const sched = JSON.parse(JSON.stringify(SCHEDULE));
+  try {
+    const ovr = await db.query("SELECT dept, data FROM schedule_overrides");
+    for (const row of ovr.rows) sched[row.dept] = row.data;
+    const edits = await db.query("SELECT * FROM schedule_edits");
+    for (const ed of edits.rows) {
+      if (!sched[ed.dept]) continue;
+      const days = sched[ed.dept].schedule;
+      if (!days[ed.day]) days[ed.day] = {};
+      let lesson = days[ed.day][ed.lesson_key];
+      if (!lesson) { lesson = { lesson_no: ed.lesson_no, time: ed.time, classes: {} }; days[ed.day][ed.lesson_key] = lesson; }
+      if (ed.cleared) { delete lesson.classes[ed.cls]; continue; }
+      const cellInfo = {};
+      if (ed.groups) cellInfo.groups = ed.groups;
+      else { cellInfo.subject = ed.subject; cellInfo.teacher = ed.teacher; }
+      lesson.classes[ed.cls] = cellInfo;
+    }
+  } catch (e) {}
+
+  const teacherLoad = {};
+  for (const deptName of depts) {
+    if (!sched[deptName]) continue;
+    const days = sched[deptName].schedule || {};
+    for (const day of Object.values(days)) {
+      for (const ldata of Object.values(day)) {
+        for (const cls of Object.keys(ldata.classes || {})) {
+          const cell = ldata.classes[cls];
+          const items = cell.groups ? cell.groups : [cell];
+          for (const item of items) {
+            if (!item.teacher) continue;
+            if (!teacherLoad[item.teacher]) teacherLoad[item.teacher] = { name: item.teacher, lessons: 0, subjects: new Set(), classes: new Set(), depts: new Set() };
+            const t = teacherLoad[item.teacher];
+            t.lessons++; if (item.subject) t.subjects.add(item.subject); t.classes.add(cls); t.depts.add(deptName);
+          }
+        }
+      }
+    }
+  }
+
+  // Get replacement counts per teacher
+  const replStats = await db.query(
+    `SELECT u.name, COUNT(*) FILTER (WHERE r.absent_user_id=u.id) as absent_count,
+                   COUNT(*) FILTER (WHERE r.replacement_user_id=u.id) as gave_replacements
+     FROM users u
+     LEFT JOIN replacements r ON r.absent_user_id=u.id OR r.replacement_user_id=u.id
+     WHERE u.role='teacher' GROUP BY u.name`
+  );
+  const replMap = {};
+  for (const r of replStats.rows) replMap[r.name] = r;
+
+  const rows = [["ФИО учителя", "Уроков в неделю", "Предметы", "Классы", "Отделения", "Всего замен (был отсутствующим)", "Всего замен (заменял)"]];
+  for (const t of Object.values(teacherLoad).sort((a, b) => b.lessons - a.lessons)) {
+    const rs = replMap[t.name] || {};
+    rows.push([
+      t.name,
+      t.lessons,
+      Array.from(t.subjects).join(", "),
+      Array.from(t.classes).sort().join(", "),
+      Array.from(t.depts).join(", "),
+      parseInt(rs.absent_count || 0),
+      parseInt(rs.gave_replacements || 0),
+    ]);
+  }
+
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{ wch: 30 }, { wch: 18 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 25 }];
+  xlsx.utils.book_append_sheet(wb, ws, "Нагрузка учителей");
+  const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="workload-${new Date().toISOString().slice(0,10)}.xlsx"`);
+  res.send(buf);
+});
+
+// GET /api/stats/replacements/xlsx — download replacements as Excel
+app.get("/api/stats/replacements/xlsx", authMiddleware, requireHead, async (req, res) => {
+  const { dept, from_date, to_date } = req.query;
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
+  const depts = dept ? [dept] : allowedDepts;
+  const params = [depts];
+  const conditions = ["r.dept=ANY($1)"];
+  if (from_date) { params.push(from_date); conditions.push(`r.created_at::date >= $${params.length}`); }
+  if (to_date)   { params.push(to_date);   conditions.push(`r.created_at::date <= $${params.length}`); }
+  const where = "WHERE " + conditions.join(" AND ");
+
+  const r = await db.query(`
+    SELECT r.day, r.dept, r.cls, r.lesson_no, r.time, r.subject, r.room,
+           a.name as absent_name, rp.name as replacement_name,
+           r.response_status, r.comment, r.created_at::date as date_created
+    FROM replacements r
+    LEFT JOIN users a ON a.id=r.absent_user_id
+    LEFT JOIN users rp ON rp.id=r.replacement_user_id
+    ${where} ORDER BY r.created_at DESC`, params);
+
+  const rows = [["Дата", "Отделение", "Класс", "Урок №", "Время", "Предмет", "Кабинет", "Отсутствовал", "Заменял", "Статус", "Причина"]];
+  for (const rep of r.rows) {
+    const status = rep.response_status === "confirmed" ? "Подтверждено" : rep.response_status === "declined" ? "Отклонено" : "Ожидание";
+    rows.push([rep.day, rep.dept, rep.cls, rep.lesson_no, rep.time, rep.subject, rep.room, rep.absent_name, rep.replacement_name, status, rep.comment || ""]);
+  }
+
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{ wch: 15 }, { wch: 18 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 25 }, { wch: 25 }, { wch: 14 }, { wch: 30 }];
+  xlsx.utils.book_append_sheet(wb, ws, "Замены");
+  const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="replacements-${new Date().toISOString().slice(0,10)}.xlsx"`);
+  res.send(buf);
+});
+
+// ============================================================
+// ROOM CONFLICT CHECK
+// ============================================================
+
+// GET /api/schedule/room-conflicts — find all room conflicts in current schedule
+app.get("/api/schedule/room-conflicts", authMiddleware, requireHead, async (req, res) => {
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const { dept } = req.query;
+  if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
+  const depts = dept ? [dept] : allowedDepts;
+
+  // Build merged schedule
+  const sched = JSON.parse(JSON.stringify(SCHEDULE));
+  try {
+    const ovr = await db.query("SELECT dept, data FROM schedule_overrides");
+    for (const row of ovr.rows) sched[row.dept] = row.data;
+    const edits = await db.query("SELECT * FROM schedule_edits");
+    for (const ed of edits.rows) {
+      if (!sched[ed.dept]) continue;
+      const days = sched[ed.dept].schedule;
+      if (!days[ed.day]) days[ed.day] = {};
+      let lesson = days[ed.day][ed.lesson_key];
+      if (!lesson) { lesson = { lesson_no: ed.lesson_no, time: ed.time, classes: {} }; days[ed.day][ed.lesson_key] = lesson; }
+      if (ed.cleared) { delete lesson.classes[ed.cls]; continue; }
+      const cellInfo = {};
+      if (ed.groups) cellInfo.groups = ed.groups;
+      else { cellInfo.subject = ed.subject; cellInfo.teacher = ed.teacher; }
+      cellInfo.room = ed.room;
+      lesson.classes[ed.cls] = cellInfo;
+    }
+  } catch (e) {}
+
+  // Find conflicts: same day + lesson_no + room across any two different cls/dept
+  // key = day|lesson_no|room -> list of {dept, cls, subject, teacher}
+  const roomSlots = {};
+  for (const deptName of depts) {
+    if (!sched[deptName]) continue;
+    const days = sched[deptName].schedule || {};
+    for (const [dayName, daySlots] of Object.entries(days)) {
+      for (const [lkey, ldata] of Object.entries(daySlots)) {
+        for (const [cls, cell] of Object.entries(ldata.classes || {})) {
+          const items = cell.groups ? cell.groups : [cell];
+          for (const item of items) {
+            if (!item.room) continue;
+            const key = `${dayName}|${ldata.lesson_no || lkey}|${item.room}`;
+            if (!roomSlots[key]) roomSlots[key] = [];
+            roomSlots[key].push({ dept: deptName, day: dayName, lesson_no: ldata.lesson_no, lesson_key: lkey, cls, room: item.room, subject: item.subject, teacher: item.teacher });
+          }
+        }
+      }
+    }
+  }
+
+  const conflicts = [];
+  for (const [key, slots] of Object.entries(roomSlots)) {
+    if (slots.length >= 2) {
+      conflicts.push({ key, room: slots[0].room, day: slots[0].day, lesson_no: slots[0].lesson_no, slots });
+    }
+  }
+  conflicts.sort((a, b) => a.day.localeCompare(b.day) || (a.lesson_no - b.lesson_no));
+  res.json({ conflicts, total: conflicts.length });
+});
+
+// Also check room conflicts in schedule edit (non-blocking warning)
+// GET /api/schedule/room-check?dept=&day=&lesson_no=&room=&exclude_cls=
+app.get("/api/schedule/room-check", authMiddleware, async (req, res) => {
+  const { dept, day, lesson_no, room, exclude_cls } = req.query;
+  if (!dept || !day || !lesson_no || !room) return res.json({ conflict: false });
+
+  // Get all schedule_edits for this slot
+  const r = await db.query(
+    "SELECT cls, subject, teacher FROM schedule_edits WHERE dept=$1 AND day=$2 AND lesson_no=$3 AND room=$4 AND (cleared IS NULL OR cleared=FALSE)",
+    [dept, day, parseInt(lesson_no), room]
+  );
+  const conflicts = r.rows.filter(row => row.cls !== exclude_cls);
+  if (conflicts.length > 0) {
+    return res.json({ conflict: true, conflicting_lessons: conflicts });
+  }
+  res.json({ conflict: false });
+});
+
 // === Health ===
 app.get("/api/health", async (req, res) => {
   try {
