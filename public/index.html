@@ -143,6 +143,9 @@
     <button class="section-btn" data-section="schedhist" id="schedHistTab" style="display:none;" onclick="setSection('schedhist')">
       📋 Версии
     </button>
+    <button class="section-btn" data-section="generator" id="generatorTab" style="display:none;" onclick="setSection('generator')">
+      🤖 Генератор
+    </button>
     <button class="section-btn" data-section="admin" id="adminTab" style="display:none;" onclick="setSection('admin')">
       ⚙️ Сотрудники
     </button>
@@ -165,6 +168,9 @@
 
   <!-- SCHEDULE HISTORY SECTION -->
   <div id="sectionSchedhist" style="display:none;"></div>
+
+  <!-- GENERATOR SECTION -->
+  <div id="sectionGenerator" style="display:none;"></div>
 
   <!-- ADMIN SECTION -->
   <div id="sectionAdmin" style="display:none;"></div>
@@ -400,6 +406,149 @@
       <button class="btn" onclick="sendInvite()">Отправить уведомление</button>
     </div>
     <div id="inviteErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Availability Edit Modal -->
+<div class="modal-bg" id="availModal">
+  <div class="modal" style="max-width:860px;overflow:auto;max-height:90vh;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;" id="availModalTitle">Доступность учителя</h3>
+      <button class="link-btn" onclick="closeAvailModal()" style="font-size:14px;">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+      ✅ — учитель <b>доступен</b> в этот слот &nbsp;|&nbsp; ⬜ — недоступен
+    </div>
+    <div id="availGrid" style="overflow-x:auto;"></div>
+    <div class="modal-row" style="margin-top:10px;">
+      <label>Отделение (оставьте пустым — ограничение для всех)</label>
+      <select id="availDept">
+        <option value="">Все отделения</option>
+        <option value="Империал">Империал</option>
+        <option value="Пушкина">Пушкина</option>
+        <option value="Чкалова">Чкалова</option>
+        <option value="Кирова">Кирова</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeAvailModal()">Отмена</button>
+      <button class="btn" onclick="saveAvailability()">💾 Сохранить</button>
+    </div>
+    <div id="availErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Curriculum Import Modal -->
+<div class="modal-bg" id="currImportModal">
+  <div class="modal" style="max-width:640px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Загрузить учебный план из Excel</h3>
+      <button class="link-btn" onclick="document.getElementById('currImportModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row"><label>Отделение</label>
+      <select id="currImportDept">
+        <option value="Империал">Империал</option>
+        <option value="Пушкина">Пушкина</option>
+        <option value="Чкалова">Чкалова</option>
+        <option value="Кирова">Кирова</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Файл Excel</label>
+      <input type="file" id="currImportFile" accept=".xlsx,.xls" style="padding:6px;">
+    </div>
+    <div style="background:#F0FFF4;border:1px solid #BBF7D0;border-radius:6px;padding:10px;font-size:12px;margin-bottom:12px;">
+      <b>Формат файла:</b> строка заголовка: <code>Класс | Предмет | Часов | Тип | Учитель</code><br>
+      Тип: main / oge / ege / elective / support / selfprep / extracurr
+    </div>
+    <div id="currImportPreview" style="max-height:260px;overflow:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="previewCurrImport()">🔍 Предпросмотр</button>
+      <button class="btn" onclick="confirmCurrImport()" id="currImportConfirmBtn" disabled>✅ Загрузить</button>
+    </div>
+    <div id="currImportErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Profile Group Modal -->
+<div class="modal-bg" id="pgModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;" id="pgModalTitle">Профильная группа</h3>
+      <button class="link-btn" onclick="document.getElementById('pgModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <input type="hidden" id="pgId">
+    <div class="modal-row"><label>Отделение</label>
+      <select id="pgDept">
+        <option value="Империал">Империал</option><option value="Пушкина">Пушкина</option>
+        <option value="Чкалова">Чкалова</option><option value="Кирова">Кирова</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Класс</label><input type="text" id="pgCls" placeholder="9, 10ф, 11г"></div>
+    <div class="modal-row"><label>Название группы</label><input type="text" id="pgName" placeholder="ОГЭ история"></div>
+    <div class="modal-row"><label>Код группы (короткий)</label><input type="text" id="pgCode" placeholder="ист"></div>
+    <div class="modal-row"><label>Предмет подготовки</label><input type="text" id="pgSubject" placeholder="История"></div>
+    <div class="modal-row"><label>Тип экзамена</label>
+      <select id="pgExam"><option value="">—</option><option value="oge">ОГЭ</option><option value="ege">ЕГЭ</option></select>
+    </div>
+    <div class="modal-row"><label>Учитель</label><select id="pgTeacher"><option value="">— выберите —</option></select></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('pgModal').classList.remove('show')">Отмена</button>
+      <button class="btn" onclick="savePG()">Сохранить</button>
+    </div>
+    <div id="pgErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Room Modal -->
+<div class="modal-bg" id="roomModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">Кабинет</h3>
+      <button class="link-btn" onclick="document.getElementById('roomModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row"><label>Отделение</label>
+      <select id="roomDept">
+        <option value="Империал">Империал</option><option value="Пушкина">Пушкина</option>
+        <option value="Чкалова">Чкалова</option><option value="Кирова">Кирова</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Название/номер кабинета</label><input type="text" id="roomName" placeholder="каб. 5"></div>
+    <div class="modal-row"><label>Вместимость</label><input type="number" id="roomCap" value="30"></div>
+    <div class="modal-row"><label>Примечание</label><input type="text" id="roomNote" placeholder="только для 5 класса"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('roomModal').classList.remove('show')">Отмена</button>
+      <button class="btn" onclick="saveRoom()">Сохранить</button>
+    </div>
+    <div id="roomErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Generate Modal -->
+<div class="modal-bg" id="generateModal">
+  <div class="modal" style="max-width:560px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">🤖 Генерация расписания</h3>
+      <button class="link-btn" onclick="document.getElementById('generateModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div class="modal-row"><label>Отделение</label>
+      <select id="genDept">
+        <option value="Империал">Империал</option><option value="Пушкина">Пушкина</option>
+        <option value="Чкалова">Чкалова</option><option value="Кирова">Кирова</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>Название версии</label><input type="text" id="genName" placeholder="Неделя 27.10.2026 v1"></div>
+    <div class="modal-row"><label>Дата начала недели (понедельник)</label><input type="date" id="genWeekStart"></div>
+    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:10px;font-size:12px;margin-bottom:12px;">
+      <b>Алгоритм генерирует расписание по 32 правилам:</b><br>
+      приоритет 11→10→9→младшие классы, учёт доступности учителей, профильных групп,
+      парные уроки, прогулки, академическая поддержка, самоподготовка и др.
+    </div>
+    <div id="genLog" style="display:none;background:#F9FAFB;border-radius:6px;padding:10px;font-size:11px;max-height:180px;overflow:auto;font-family:monospace;margin-bottom:10px;"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('generateModal').classList.remove('show')">Отмена</button>
+      <button class="btn" onclick="runGenerate()" id="genBtn">▶ Сгенерировать</button>
+    </div>
+    <div id="genErr" class="login-error"></div>
   </div>
 </div>
 

@@ -916,6 +916,27 @@ app.delete("/api/schedule-slots/slot/:id", authMiddleware, requireHead, async (r
   res.json({ ok: true });
 });
 
+// === Generate Schedule (lightweight server-side validation only; main CSP runs client-side) ===
+// POST /api/generate — validate payload, optionally run server-side CSP, save version+slots
+app.post("/api/generate", requireAuth, requireHead, async (req, res) => {
+  // The main CSP engine runs client-side (scheduler is in app.js).
+  // This endpoint is a fallback server-side generator: it receives dept+version info
+  // and can create the version record. Full generation is done client-side then
+  // slots are POSTed to /api/schedule-slots/:version_id.
+  // This endpoint simply validates and returns OK so the client can proceed.
+  const { dept, name, week_start } = req.body;
+  if (!dept || !name) return res.status(400).json({ error: "dept и name обязательны" });
+  try {
+    // Check curriculum exists
+    const cr = await db.query("SELECT COUNT(*) FROM curriculum WHERE dept=$1", [dept]);
+    const count = parseInt(cr.rows[0].count);
+    if (count === 0) return res.status(400).json({ error: "Учебный план не загружен для этого отделения" });
+    res.json({ ok: true, message: "Генерация доступна", curriculum_count: count });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // === Health ===
 app.get("/api/health", async (req, res) => {
   try {

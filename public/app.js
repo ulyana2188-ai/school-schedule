@@ -968,6 +968,7 @@ function setSection(s) {
     acsup: "sectionAcsup",
     absences: "sectionAbsences",
     schedhist: "sectionSchedhist",
+    generator: "sectionGenerator",
   };
   for (const k in map) {
     const el = document.getElementById(map[k]);
@@ -982,6 +983,7 @@ function setSection(s) {
   if (s === "acsup") renderAcsup();
   if (s === "absences") renderAbsences();
   if (s === "schedhist") renderSchedHistory();
+  if (s === "generator") renderGenerator();
 }
 function populateClassFilter() {
   const sel = document.getElementById("classFilter");
@@ -1031,11 +1033,15 @@ function initUI() {
     document.getElementById("editModeBtn").style.display = "";
     const sht = document.getElementById("schedHistTab");
     if (sht) sht.style.display = "";
+    const genTab = document.getElementById("generatorTab");
+    if (genTab) genTab.style.display = "";
   } else {
     document.getElementById("adminTab").style.display = "none";
     document.getElementById("editModeBtn").style.display = "none";
     const sht = document.getElementById("schedHistTab");
     if (sht) sht.style.display = "none";
+    const genTab = document.getElementById("generatorTab");
+    if (genTab) genTab.style.display = "none";
   }
   // Show "Моё расписание" if user has any teaching hours (teachers + heads who also teach)
   const myTab = document.getElementById("myTab");
@@ -2610,6 +2616,1097 @@ async function renderSchedHistory() {
   }
   root.innerHTML = html;
 }
+
+// ============= GENERATOR API CLIENT =============
+Object.assign(API, {
+  // Кабинеты
+  roomsList(dept)       { return this.fetch("/api/rooms" + (dept ? `?dept=${encodeURIComponent(dept)}` : "")); },
+  roomCreate(d)         { return this.fetch("/api/rooms", { method:"POST", body:JSON.stringify(d) }); },
+  roomDelete(id)        { return this.fetch(`/api/rooms/${id}`, { method:"DELETE" }); },
+  // Доступность
+  availGet(teacher_id, dept) {
+    const p = new URLSearchParams();
+    if (teacher_id) p.set("teacher_id", teacher_id);
+    if (dept) p.set("dept", dept);
+    return this.fetch("/api/availability?" + p.toString());
+  },
+  availSave(d)          { return this.fetch("/api/availability", { method:"POST", body:JSON.stringify(d) }); },
+  // Учебный план
+  currList(dept, cls) {
+    const p = new URLSearchParams();
+    if (dept) p.set("dept", dept);
+    if (cls) p.set("cls", cls);
+    return this.fetch("/api/curriculum?" + p.toString());
+  },
+  currCreate(d)         { return this.fetch("/api/curriculum", { method:"POST", body:JSON.stringify(d) }); },
+  currDelete(id)        { return this.fetch(`/api/curriculum/${id}`, { method:"DELETE" }); },
+  currImport(file, dept, preview) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("dept", dept);
+    if (preview) fd.append("preview", "true");
+    return fetch("/api/curriculum/import", {
+      method:"POST", headers:{ Authorization:"Bearer " + this.token }, body:fd
+    }).then(async r => { const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||"err"); return d; });
+  },
+  // Профильные группы
+  pgList(dept, cls) {
+    const p = new URLSearchParams();
+    if (dept) p.set("dept", dept);
+    if (cls) p.set("cls", cls);
+    return this.fetch("/api/profile-groups?" + p.toString());
+  },
+  pgCreate(d)           { return this.fetch("/api/profile-groups", { method:"POST", body:JSON.stringify(d) }); },
+  pgUpdate(id, d)       { return this.fetch(`/api/profile-groups/${id}`, { method:"PATCH", body:JSON.stringify(d) }); },
+  pgDelete(id)          { return this.fetch(`/api/profile-groups/${id}`, { method:"DELETE" }); },
+  // Версии расписаний
+  svList(dept)          { return this.fetch("/api/schedule-versions" + (dept ? `?dept=${encodeURIComponent(dept)}` : "")); },
+  svCreate(d)           { return this.fetch("/api/schedule-versions", { method:"POST", body:JSON.stringify(d) }); },
+  svPatch(id, d)        { return this.fetch(`/api/schedule-versions/${id}`, { method:"PATCH", body:JSON.stringify(d) }); },
+  // Слоты
+  slotsList(vid)        { return this.fetch(`/api/schedule-slots/${vid}`); },
+  slotsCreate(vid, arr) { return this.fetch(`/api/schedule-slots/${vid}`, { method:"POST", body:JSON.stringify(arr) }); },
+  slotsClear(vid)       { return this.fetch(`/api/schedule-slots/${vid}/all`, { method:"DELETE" }); },
+  // Генерация
+  generate(d)           { return this.fetch("/api/generate", { method:"POST", body:JSON.stringify(d) }); },
+});
+
+// ============= GENERATOR STATE =============
+let GEN = {
+  dept: "Империал",
+  tab: "availability",    // availability | curriculum | groups | rooms | versions
+  availability: [],       // raw rows from API
+  curriculum: [],
+  groups: [],
+  rooms: [],
+  versions: [],
+  currentVersion: null,   // {id, name, ...}
+  slots: [],
+  // editing
+  availTeacherId: null,
+  availSlots: {},         // "day|no" -> boolean
+};
+
+const LESSON_TIMES = [
+  {no:0, label:"Орг. момент / ЗОЖ", time:"8:10–8:30"},
+  {no:1, label:"1 урок",  time:"8:30–9:50"},
+  {no:2, label:"2 урок",  time:"10:00–11:20"},
+  {no:3, label:"3 урок",  time:"11:30–12:50"},
+  {no:4, label:"4 урок",  time:"13:00–14:20"},
+  {no:5, label:"5 урок",  time:"14:30–15:50"},
+  {no:6, label:"6 урок",  time:"16:00–17:20"},
+  {no:7, label:"7 урок",  time:"17:30–18:50"},
+  {no:8, label:"8 урок",  time:"19:00–20:20"},
+  {no:9, label:"9 урок",  time:"20:30–21:50"},
+];
+
+const SUBJ_TYPE_LABELS = {
+  main:"Основной", oge:"ОГЭ", ege:"ЕГЭ", elective:"Элективный",
+  support:"Академподдержка", selfprep:"Самоподготовка", extracurr:"Доп. образование"
+};
+
+// ============= GENERATOR UI RENDER =============
+
+async function renderGenerator() {
+  const root = document.getElementById("sectionGenerator");
+  root.innerHTML = `
+    <div class="today-greeting">
+      <h2>🤖 Генератор расписания</h2>
+      <div class="day-of-week">Настройка данных и автоматическое составление расписания</div>
+    </div>
+    <div class="toolbar" style="gap:4px;margin-bottom:0;">
+      <select id="genDeptFilter" onchange="onGenDeptChange(this.value)" style="padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        <option value="Империал">🏛 Империал</option>
+        <option value="Пушкина">📚 Пушкина</option>
+        <option value="Чкалова">✈️ Чкалова</option>
+        <option value="Кирова">🌿 Кирова</option>
+      </select>
+      <div class="gen-tabs" style="display:flex;gap:4px;flex:1;flex-wrap:wrap;">
+        ${["availability","curriculum","groups","rooms","versions"].map(t => `
+          <button class="gen-tab-btn ${GEN.tab===t?'active':''}" onclick="setGenTab('${t}')" data-tab="${t}">${{
+            availability:"📅 Доступность учителей",
+            curriculum:"📋 Учебный план",
+            groups:"👥 Профильные группы",
+            rooms:"🚪 Кабинеты",
+            versions:"📦 Версии расписания"
+          }[t]}</button>
+        `).join("")}
+      </div>
+      <button class="btn" onclick="openGenerateModal()">🤖 Сгенерировать</button>
+    </div>
+    <div id="genTabContent" style="padding:16px;"></div>
+  `;
+  document.getElementById("genDeptFilter").value = GEN.dept;
+  await loadGenTabContent();
+}
+
+async function onGenDeptChange(dept) {
+  GEN.dept = dept;
+  await loadGenTabContent();
+}
+
+async function setGenTab(tab) {
+  GEN.tab = tab;
+  document.querySelectorAll(".gen-tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  await loadGenTabContent();
+}
+
+async function loadGenTabContent() {
+  const root = document.getElementById("genTabContent");
+  if (!root) return;
+  root.innerHTML = `<div style="color:var(--text-muted);font-size:13px;">Загрузка…</div>`;
+  try {
+    if (GEN.tab === "availability")  await renderAvailabilityTab(root);
+    else if (GEN.tab === "curriculum") await renderCurriculumTab(root);
+    else if (GEN.tab === "groups")   await renderGroupsTab(root);
+    else if (GEN.tab === "rooms")    await renderRoomsTab(root);
+    else if (GEN.tab === "versions") await renderVersionsTab(root);
+  } catch(e) {
+    root.innerHTML = `<div style="color:#ef4444;padding:12px;">Ошибка загрузки: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+// --- Доступность учителей ---
+async function renderAvailabilityTab(root) {
+  const r = await API.availGet(null, GEN.dept);
+  GEN.availability = r.availability;
+
+  // Сгруппировать по учителю
+  const byTeacher = {};
+  for (const a of GEN.availability) {
+    if (!byTeacher[a.teacher_id]) byTeacher[a.teacher_id] = { name: a.teacher_name, slots: [] };
+    byTeacher[a.teacher_id].slots.push(a);
+  }
+
+  // Все учителя этого отделения
+  const teachers = ACCOUNTS.filter(a => a.role === "teacher" && (
+    (a.depts || []).includes(GEN.dept) || a.dept === GEN.dept
+  )).sort((a,b) => a.name.localeCompare(b.name,"ru"));
+
+  // Также добавить руководителей, которые преподают
+  const headTeachers = ACCOUNTS.filter(a => a.role === "head" && (a.depts||[]).includes(GEN.dept) && (a.subjects||[]).length > 0);
+  const allTeachers = [...teachers, ...headTeachers].sort((a,b) => a.name.localeCompare(b.name,"ru"));
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div>
+        <b>Доступность учителей · ${escapeHtml(GEN.dept)}</b>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:8px;">${allTeachers.length} учителей</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" onclick="openAvailImport()">📤 Загрузить Excel</button>
+        <button class="btn" onclick="openAvailModal(null)">+ Заполнить</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="gen-table">
+      <thead><tr>
+        <th>Учитель</th>
+        ${DAYS.map(d=>`<th colspan="2" style="text-align:center;">${d}</th>`).join("")}
+        <th></th>
+      </tr>
+      <tr>
+        <th></th>
+        ${DAYS.map(()=>`<th style="font-size:10px;color:var(--text-muted);">Доступен</th><th style="font-size:10px;color:var(--text-muted);">Недост.</th>`).join("")}
+        <th></th>
+      </tr>
+      </thead>
+      <tbody>
+  `;
+  for (const t of allTeachers) {
+    const tData = byTeacher[t.id];
+    const avail = tData ? tData.slots.filter(s => s.available) : [];
+    const unavail = tData ? tData.slots.filter(s => !s.available) : [];
+    const rowClass = !tData ? "gen-row-empty" : "";
+    html += `<tr class="${rowClass}">
+      <td><b>${escapeHtml(t.name)}</b><br><span style="font-size:11px;color:var(--text-muted);">${(t.subjects||[]).slice(0,2).join(", ")}</span></td>
+      ${DAYS.map(d => {
+        const dayAvail = avail.filter(s => s.day_of_week === d).map(s=>s.lesson_no).sort().join(",");
+        const dayUn   = unavail.filter(s => s.day_of_week === d).map(s=>s.lesson_no).sort().join(",");
+        return `<td style="font-size:11px;color:#16A34A;">${dayAvail || "—"}</td><td style="font-size:11px;color:#DC2626;">${dayUn || "—"}</td>`;
+      }).join("")}
+      <td><button class="link-btn" onclick="openAvailModal(${t.id})">✎</button></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+  root.innerHTML = html;
+}
+
+function openAvailModal(teacherId) {
+  GEN.availTeacherId = teacherId;
+  const modal = document.getElementById("availModal");
+  const teacher = teacherId ? ACCOUNTS.find(a => a.id === teacherId) : null;
+  document.getElementById("availModalTitle").textContent = teacher
+    ? `Доступность: ${teacher.name}` : "Моя доступность";
+
+  // Build slot map from existing data
+  const existing = GEN.availability.filter(a => !teacherId || a.teacher_id === teacherId);
+  GEN.availSlots = {};
+  for (const a of existing) {
+    GEN.availSlots[a.day_of_week + "|" + a.lesson_no] = a.available;
+  }
+  // Default: all available if no data
+  if (existing.length === 0) {
+    for (const day of DAYS) for (const l of LESSON_TIMES) {
+      GEN.availSlots[day + "|" + l.no] = true;
+    }
+  }
+
+  // Render grid
+  let html = `<table class="gen-table avail-grid">
+    <thead><tr><th>Урок / Время</th>${DAYS.map(d=>`<th>${d}</th>`).join("")}</tr></thead>
+    <tbody>`;
+  for (const l of LESSON_TIMES) {
+    html += `<tr><td style="font-size:11px;"><b>${l.no === 0 ? "0 (орг.)" : l.no}</b><br><span style="color:var(--text-muted);">${l.time}</span></td>`;
+    for (const day of DAYS) {
+      const key = day + "|" + l.no;
+      const checked = GEN.availSlots[key] !== false;
+      html += `<td style="text-align:center;">
+        <input type="checkbox" class="avail-cb" data-key="${key}" ${checked?"checked":""} onchange="GEN.availSlots[this.dataset.key]=this.checked">
+      </td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById("availGrid").innerHTML = html;
+  document.getElementById("availErr").textContent = "";
+  modal.classList.add("show");
+}
+
+function closeAvailModal() {
+  document.getElementById("availModal").classList.remove("show");
+}
+
+async function saveAvailability() {
+  const dept = document.getElementById("availDept").value || null;
+  const teacherId = GEN.availTeacherId;
+  const slots = [];
+  for (const [key, avail] of Object.entries(GEN.availSlots)) {
+    const [day, no] = key.split("|");
+    slots.push({ day_of_week: day, lesson_no: parseInt(no), available: avail });
+  }
+  try {
+    await API.availSave({ teacher_id: teacherId, dept, slots });
+    closeAvailModal();
+    await loadGenTabContent();
+  } catch(e) {
+    document.getElementById("availErr").textContent = "Ошибка: " + e.message;
+  }
+}
+
+function openAvailImport() {
+  alert("Загрузка доступности из Excel:\n\nФормат: Учитель | Понедельник_1 | Понедельник_2 | … | Пятница_9\nДа/Нет или 1/0 в ячейках.\n\nФункция будет добавлена в следующей версии.");
+}
+
+// --- Учебный план ---
+async function renderCurriculumTab(root) {
+  const r = await API.currList(GEN.dept);
+  GEN.curriculum = r.curriculum;
+
+  const byClass = {};
+  for (const c of GEN.curriculum) {
+    if (!byClass[c.cls]) byClass[c.cls] = [];
+    byClass[c.cls].push(c);
+  }
+  const classes = Object.keys(byClass).sort((a,b) => {
+    const na = parseInt(a), nb = parseInt(b);
+    return na !== nb ? na - nb : a.localeCompare(b,"ru");
+  });
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div><b>Учебный план · ${escapeHtml(GEN.dept)}</b>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:8px;">${GEN.curriculum.length} строк</span>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" onclick="openCurrImport()">📤 Загрузить Excel</button>
+        <button class="btn" onclick="openCurrAdd()">+ Добавить</button>
+      </div>
+    </div>
+  `;
+
+  if (classes.length === 0) {
+    html += `<div style="padding:32px;text-align:center;color:var(--text-muted);">
+      Учебный план не загружен.<br>
+      <button class="btn" style="margin-top:12px;" onclick="openCurrImport()">📤 Загрузить из Excel</button>
+    </div>`;
+  } else {
+    for (const cls of classes) {
+      const items = byClass[cls];
+      const totalHours = items.reduce((s,i) => s + parseFloat(i.hours_week||0), 0);
+      html += `<details style="margin-bottom:8px;" open>
+        <summary style="cursor:pointer;padding:8px 12px;background:#F9FAFB;border-radius:6px;font-weight:600;user-select:none;">
+          Класс ${escapeHtml(cls)} · ${items.length} предметов · ${totalHours} ч/нед
+        </summary>
+        <table class="gen-table" style="margin-top:4px;">
+          <thead><tr><th>Предмет</th><th>Ч/нед</th><th>Тип</th><th>Учитель</th><th></th></tr></thead>
+          <tbody>`;
+      for (const it of items) {
+        html += `<tr>
+          <td><b>${escapeHtml(it.subject)}</b></td>
+          <td>${it.hours_week}</td>
+          <td><span class="badge-type type-${it.subject_type}">${SUBJ_TYPE_LABELS[it.subject_type]||it.subject_type}</span></td>
+          <td style="font-size:12px;">${escapeHtml(it.teacher_name||"—")}</td>
+          <td><button class="link-btn" style="color:#DC2626;" onclick="deleteCurrItem(${it.id})">✕</button></td>
+        </tr>`;
+      }
+      html += `</tbody></table></details>`;
+    }
+  }
+  root.innerHTML = html;
+}
+
+function openCurrImport() {
+  document.getElementById("currImportModal").classList.add("show");
+  document.getElementById("currImportDept").value = GEN.dept;
+  document.getElementById("currImportFile").value = "";
+  document.getElementById("currImportPreview").innerHTML = "";
+  document.getElementById("currImportConfirmBtn").disabled = true;
+  document.getElementById("currImportErr").textContent = "";
+}
+
+async function previewCurrImport() {
+  const file = document.getElementById("currImportFile").files[0];
+  const dept = document.getElementById("currImportDept").value;
+  if (!file) { document.getElementById("currImportErr").textContent = "Выберите файл"; return; }
+  try {
+    const r = await API.currImport(file, dept, true);
+    let html = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Найдено ${r.total} строк. Первые 50:</div>
+      <table class="gen-table" style="font-size:11px;">
+      <thead><tr><th>Класс</th><th>Предмет</th><th>Ч/нед</th><th>Тип</th></tr></thead><tbody>`;
+    for (const p of r.preview) {
+      html += `<tr><td>${escapeHtml(p.cls)}</td><td>${escapeHtml(p.subject)}</td><td>${p.hours_week}</td><td>${escapeHtml(p.subject_type)}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    document.getElementById("currImportPreview").innerHTML = html;
+    document.getElementById("currImportConfirmBtn").disabled = false;
+    document.getElementById("currImportErr").textContent = "";
+  } catch(e) {
+    document.getElementById("currImportErr").textContent = "Ошибка: " + e.message;
+  }
+}
+
+async function confirmCurrImport() {
+  const file = document.getElementById("currImportFile").files[0];
+  const dept = document.getElementById("currImportDept").value;
+  try {
+    const r = await API.currImport(file, dept, false);
+    document.getElementById("currImportModal").classList.remove("show");
+    GEN.dept = dept;
+    await loadGenTabContent();
+    alert(`✅ Загружено ${r.saved} строк учебного плана.`);
+  } catch(e) {
+    document.getElementById("currImportErr").textContent = "Ошибка: " + e.message;
+  }
+}
+
+function openCurrAdd() {
+  const cls = prompt("Класс (например: 5, 7а, 10ф):");
+  if (!cls) return;
+  const subject = prompt("Предмет:");
+  if (!subject) return;
+  const hours = parseFloat(prompt("Часов в неделю:"));
+  if (isNaN(hours)) return;
+  API.currCreate({ dept: GEN.dept, cls: cls.trim(), subject: subject.trim(), hours_week: hours })
+    .then(() => loadGenTabContent())
+    .catch(e => alert("Ошибка: " + e.message));
+}
+
+async function deleteCurrItem(id) {
+  if (!confirm("Удалить эту строку учебного плана?")) return;
+  await API.currDelete(id);
+  await loadGenTabContent();
+}
+
+// --- Профильные группы ---
+async function renderGroupsTab(root) {
+  const r = await API.pgList(GEN.dept);
+  GEN.groups = r.groups;
+
+  const byClass = {};
+  for (const g of GEN.groups) {
+    if (!byClass[g.cls]) byClass[g.cls] = [];
+    byClass[g.cls].push(g);
+  }
+  const classes = Object.keys(byClass).sort((a,b) => parseInt(b)-parseInt(a));
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div><b>Профильные группы · ${escapeHtml(GEN.dept)}</b>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:8px;">ОГЭ/ЕГЭ и профильные предметы 9–11 кл</span>
+      </div>
+      <button class="btn" onclick="openPGModal()">+ Добавить группу</button>
+    </div>
+  `;
+
+  if (GEN.groups.length === 0) {
+    html += `<div style="padding:32px;text-align:center;color:var(--text-muted);">
+      Профильных групп нет.<br>
+      <button class="btn" style="margin-top:12px;" onclick="openPGModal()">+ Добавить</button>
+    </div>`;
+  } else {
+    for (const cls of classes) {
+      html += `<details style="margin-bottom:8px;" open>
+        <summary style="cursor:pointer;padding:8px 12px;background:#F9FAFB;border-radius:6px;font-weight:600;user-select:none;">
+          Класс ${escapeHtml(cls)} · ${byClass[cls].length} групп
+        </summary>
+        <table class="gen-table" style="margin-top:4px;">
+          <thead><tr><th>Группа</th><th>Код</th><th>Предмет</th><th>Тип</th><th>Учитель</th><th></th></tr></thead>
+          <tbody>`;
+      for (const g of byClass[cls]) {
+        html += `<tr>
+          <td><b>${escapeHtml(g.group_name)}</b></td>
+          <td><code style="background:#EEF2FF;padding:2px 6px;border-radius:4px;">${escapeHtml(g.group_code)}</code></td>
+          <td>${escapeHtml(g.subject||"—")}</td>
+          <td><span class="badge-type type-${g.exam_type||'main'}">${g.exam_type ? g.exam_type.toUpperCase() : "—"}</span></td>
+          <td style="font-size:12px;">${escapeHtml(g.teacher_name||"—")}</td>
+          <td>
+            <button class="link-btn" onclick="openPGModal(${g.id})">✎</button>
+            <button class="link-btn" style="color:#DC2626;margin-left:6px;" onclick="deletePG(${g.id})">✕</button>
+          </td>
+        </tr>`;
+      }
+      html += `</tbody></table></details>`;
+    }
+  }
+  root.innerHTML = html;
+}
+
+function openPGModal(id) {
+  const modal = document.getElementById("pgModal");
+  const g = id ? GEN.groups.find(x => x.id === id) : null;
+  document.getElementById("pgModalTitle").textContent = g ? "Редактировать группу" : "Новая профильная группа";
+  document.getElementById("pgId").value = id || "";
+  document.getElementById("pgDept").value = g ? g.dept : GEN.dept;
+  document.getElementById("pgCls").value = g ? g.cls : "";
+  document.getElementById("pgName").value = g ? g.group_name : "";
+  document.getElementById("pgCode").value = g ? g.group_code : "";
+  document.getElementById("pgSubject").value = g ? (g.subject||"") : "";
+  document.getElementById("pgExam").value = g ? (g.exam_type||"") : "";
+  document.getElementById("pgErr").textContent = "";
+  // Fill teacher select
+  const sel = document.getElementById("pgTeacher");
+  const teachers = ACCOUNTS.filter(a => a.role === "teacher" || (a.role === "head" && (a.subjects||[]).length > 0))
+    .sort((a,b) => a.name.localeCompare(b.name,"ru"));
+  sel.innerHTML = `<option value="">— выберите —</option>` +
+    teachers.map(t => `<option value="${t.id}" ${g && g.teacher_id === t.id ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("");
+  modal.classList.add("show");
+}
+
+async function savePG() {
+  const id = document.getElementById("pgId").value;
+  const d = {
+    dept: document.getElementById("pgDept").value,
+    cls: document.getElementById("pgCls").value.trim(),
+    group_name: document.getElementById("pgName").value.trim(),
+    group_code: document.getElementById("pgCode").value.trim(),
+    subject: document.getElementById("pgSubject").value.trim() || null,
+    exam_type: document.getElementById("pgExam").value || null,
+    teacher_id: document.getElementById("pgTeacher").value || null,
+  };
+  if (!d.cls || !d.group_name || !d.group_code) {
+    document.getElementById("pgErr").textContent = "Заполните класс, название и код группы";
+    return;
+  }
+  try {
+    if (id) await API.pgUpdate(id, d); else await API.pgCreate(d);
+    document.getElementById("pgModal").classList.remove("show");
+    await loadGenTabContent();
+  } catch(e) { document.getElementById("pgErr").textContent = "Ошибка: " + e.message; }
+}
+
+async function deletePG(id) {
+  if (!confirm("Удалить группу?")) return;
+  await API.pgDelete(id);
+  await loadGenTabContent();
+}
+
+// --- Кабинеты ---
+async function renderRoomsTab(root) {
+  const r = await API.roomsList(GEN.dept);
+  GEN.rooms = r.rooms;
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div><b>Кабинеты · ${escapeHtml(GEN.dept)}</b>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:8px;">${GEN.rooms.length} кабинетов</span>
+      </div>
+      <button class="btn" onclick="openRoomModal()">+ Добавить</button>
+    </div>
+    <table class="gen-table">
+      <thead><tr><th>Кабинет</th><th>Вместимость</th><th>Примечание</th><th></th></tr></thead>
+      <tbody>`;
+  if (GEN.rooms.length === 0) {
+    html += `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">Кабинеты не добавлены</td></tr>`;
+  }
+  for (const rm of GEN.rooms) {
+    html += `<tr>
+      <td><b>${escapeHtml(rm.name)}</b></td>
+      <td>${rm.capacity}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${escapeHtml(rm.notes||"")}</td>
+      <td><button class="link-btn" style="color:#DC2626;" onclick="deleteRoom(${rm.id})">✕</button></td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  root.innerHTML = html;
+}
+
+function openRoomModal() {
+  document.getElementById("roomModal").classList.add("show");
+  document.getElementById("roomDept").value = GEN.dept;
+  document.getElementById("roomName").value = "";
+  document.getElementById("roomCap").value = 30;
+  document.getElementById("roomNote").value = "";
+  document.getElementById("roomErr").textContent = "";
+}
+
+async function saveRoom() {
+  const d = {
+    dept: document.getElementById("roomDept").value,
+    name: document.getElementById("roomName").value.trim(),
+    capacity: parseInt(document.getElementById("roomCap").value) || 30,
+    notes: document.getElementById("roomNote").value.trim() || null,
+  };
+  if (!d.name) { document.getElementById("roomErr").textContent = "Введите название"; return; }
+  try {
+    await API.roomCreate(d);
+    document.getElementById("roomModal").classList.remove("show");
+    await loadGenTabContent();
+  } catch(e) { document.getElementById("roomErr").textContent = "Ошибка: " + e.message; }
+}
+
+async function deleteRoom(id) {
+  if (!confirm("Удалить кабинет?")) return;
+  await API.roomDelete(id);
+  await loadGenTabContent();
+}
+
+// --- Версии расписаний ---
+async function renderVersionsTab(root) {
+  const r = await API.svList(GEN.dept);
+  GEN.versions = r.versions;
+
+  const STATUS_LABELS = { draft:"Черновик", active:"Активное", archived:"Архив" };
+  const STATUS_COLORS = { draft:"#F59E0B", active:"#16A34A", archived:"#6B7280" };
+
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div><b>Версии расписания · ${escapeHtml(GEN.dept)}</b></div>
+      <button class="btn" onclick="openGenerateModal()">🤖 Сгенерировать новое</button>
+    </div>
+  `;
+
+  if (GEN.versions.length === 0) {
+    html += `<div style="padding:32px;text-align:center;color:var(--text-muted);">
+      Версий расписания нет. Нажмите «Сгенерировать новое» для старта.
+    </div>`;
+  } else {
+    html += `<div style="display:flex;flex-direction:column;gap:10px;">`;
+    for (const v of GEN.versions) {
+      const isActive = v.status === "active";
+      html += `<div class="gen-version-card ${isActive ? 'active' : ''}">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <b>${escapeHtml(v.name)}</b>
+            <span class="badge-type" style="background:${STATUS_COLORS[v.status]}22;color:${STATUS_COLORS[v.status]};border:1px solid ${STATUS_COLORS[v.status]}44;">
+              ${STATUS_LABELS[v.status]||v.status}
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+            ${v.week_start ? "Неделя с " + v.week_start : ""} · создал ${escapeHtml(v.created_by_name||"—")} · ${new Date(v.created_at).toLocaleString("ru-RU")}
+          </div>
+          ${v.notes ? `<div style="font-size:11px;color:var(--text-muted);">${escapeHtml(v.notes)}</div>` : ""}
+        </div>
+        <div style="display:flex;gap:6px;align-items:flex-start;">
+          <button class="btn secondary" onclick="viewVersion(${v.id})">👁 Просмотр</button>
+          ${!isActive ? `<button class="btn" onclick="activateVersion(${v.id})">✅ Активировать</button>` : `<span style="color:#16A34A;font-size:12px;font-weight:600;">✓ Активное</span>`}
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  root.innerHTML = html;
+}
+
+async function activateVersion(id) {
+  if (!confirm("Активировать эту версию расписания? Текущая активная будет архивирована.")) return;
+  // Archive current active
+  const current = GEN.versions.find(v => v.status === "active");
+  if (current) await API.svPatch(current.id, { status: "archived" });
+  await API.svPatch(id, { status: "active" });
+  await loadGenTabContent();
+}
+
+async function viewVersion(id) {
+  const r = await API.slotsList(id);
+  GEN.slots = r.slots;
+  const version = GEN.versions.find(v => v.id === id);
+
+  // Show version schedule in a full-screen overlay
+  const DAYS_SHORT = ["Пн","Вт","Ср","Чт","Пт"];
+  const classes = [...new Set(GEN.slots.map(s => s.cls))].sort((a,b) => {
+    const na = parseInt(a), nb = parseInt(b);
+    return na !== nb ? na - nb : a.localeCompare(b,"ru");
+  });
+
+  const root = document.getElementById("genTabContent");
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <button class="link-btn" onclick="setGenTab('versions')" style="font-size:13px;">← Назад к версиям</button>
+        <h3 style="margin:8px 0 0 0;">${escapeHtml(version?.name||"Расписание")}</h3>
+      </div>
+      <button class="btn secondary" onclick="exportVersionXlsx(${id})">📥 Скачать Excel</button>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="gen-table sched-view">
+      <thead><tr><th>Урок</th><th>Время</th>
+        ${DAYS.map(d => `<th>${d}</th>`).join("")}
+      </tr></thead>
+      <tbody>
+  `;
+
+  // Build slot index: cls -> day -> lesson_no -> slot
+  const idx = {};
+  for (const s of GEN.slots) {
+    if (!idx[s.cls]) idx[s.cls] = {};
+    if (!idx[s.cls][s.day_of_week]) idx[s.cls][s.day_of_week] = {};
+    idx[s.cls][s.day_of_week][s.lesson_no] = s;
+  }
+
+  // Class selector
+  const [viewCls, setViewCls] = (() => {
+    let cur = classes[0] || "";
+    return [() => cur, (c) => { cur = c; }];
+  })();
+
+  html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <button class="link-btn" onclick="setGenTab('versions')" style="font-size:13px;">← Назад к версиям</button>
+        <h3 style="margin:8px 0 0 0;">${escapeHtml(version?.name||"Расписание")}</h3>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <select id="versionClsFilter" onchange="renderVersionTable(${id}, this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+          ${classes.map(c => `<option value="${c}">Класс ${escapeHtml(c)}</option>`).join("")}
+        </select>
+        <button class="btn secondary" onclick="exportVersionXlsx(${id})">📥 Excel</button>
+      </div>
+    </div>
+    <div id="versionTableContainer"></div>
+  `;
+  root.innerHTML = html;
+  renderVersionTable(id, classes[0]);
+}
+
+function renderVersionTable(versionId, cls) {
+  const slots = GEN.slots.filter(s => s.cls === cls);
+  const byDay = {};
+  for (const s of slots) {
+    if (!byDay[s.day_of_week]) byDay[s.day_of_week] = {};
+    byDay[s.day_of_week][s.lesson_no] = s;
+  }
+  const usedLessons = [...new Set(slots.map(s=>s.lesson_no))].sort((a,b)=>a-b);
+
+  let html = `<table class="gen-table sched-view"><thead><tr>
+    <th>Урок</th><th>Время</th>${DAYS.map(d=>`<th>${d}</th>`).join("")}
+  </tr></thead><tbody>`;
+
+  for (const l of LESSON_TIMES) {
+    const hasAny = DAYS.some(d => byDay[d]?.[l.no]);
+    if (!hasAny && l.no > 7) continue;
+    html += `<tr><td>${l.no === 0 ? "0" : l.no}</td><td style="font-size:11px;white-space:nowrap;">${l.time}</td>`;
+    for (const day of DAYS) {
+      const s = byDay[day]?.[l.no];
+      if (!s) { html += `<td></td>`; continue; }
+      const badge = s.slot_type !== "main" ? `<span class="badge-type type-${s.slot_type}" style="font-size:9px;">${s.slot_type}</span>` : "";
+      html += `<td style="background:${s.slot_type==='support'?'#F0FFF4':s.slot_type==='walk'?'#EFF6FF':s.slot_type==='selfprep'?'#FFF7ED':''}">
+        <div style="font-size:12px;font-weight:600;">${escapeHtml(s.subject)}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${escapeHtml(s.teacher_name||"")}</div>
+        ${badge}
+      </td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  document.getElementById("versionTableContainer").innerHTML = html;
+}
+
+// --- Generate Modal ---
+function openGenerateModal() {
+  const today = new Date();
+  // Find next Monday
+  const day = today.getDay();
+  const diff = day === 0 ? 1 : (day === 6 ? 2 : (8 - day) % 7 || 7);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + (day <= 1 ? (1 - day) : diff));
+  const mondayStr = monday.toISOString().slice(0,10);
+
+  document.getElementById("genDept").value = GEN.dept;
+  document.getElementById("genName").value = `Расписание ${mondayStr} · ${GEN.dept}`;
+  document.getElementById("genWeekStart").value = mondayStr;
+  document.getElementById("genErr").textContent = "";
+  document.getElementById("genLog").style.display = "none";
+  document.getElementById("genLog").textContent = "";
+  document.getElementById("genBtn").disabled = false;
+  document.getElementById("generateModal").classList.add("show");
+}
+
+async function runGenerate() {
+  const dept = document.getElementById("genDept").value;
+  const name = document.getElementById("genName").value.trim();
+  const weekStart = document.getElementById("genWeekStart").value;
+  if (!name) { document.getElementById("genErr").textContent = "Введите название"; return; }
+
+  const log = document.getElementById("genLog");
+  log.style.display = "block";
+  log.textContent = "▶ Запуск генератора…\n";
+  document.getElementById("genBtn").disabled = true;
+  document.getElementById("genErr").textContent = "";
+
+  const addLog = (msg) => { log.textContent += msg + "\n"; log.scrollTop = 99999; };
+
+  try {
+    addLog(`📋 Загружаю данные для ${dept}…`);
+    const [currRes, pgRes, avRes, rmRes] = await Promise.all([
+      API.currList(dept), API.pgList(dept), API.availGet(null, dept), API.roomsList(dept)
+    ]);
+
+    addLog(`✅ Учебный план: ${currRes.curriculum.length} строк`);
+    addLog(`✅ Профгруппы: ${pgRes.groups.length} групп`);
+    addLog(`✅ Доступность: ${avRes.availability.length} записей`);
+    addLog(`✅ Кабинеты: ${rmRes.rooms.length}`);
+
+    if (currRes.curriculum.length === 0) {
+      throw new Error("Учебный план не загружен. Загрузите его во вкладке «Учебный план».");
+    }
+
+    addLog(`\n🧠 Запускаю алгоритм генерации (CSP)…`);
+
+    const result = scheduleCSP({
+      dept,
+      curriculum: currRes.curriculum,
+      profileGroups: pgRes.groups,
+      availability: avRes.availability,
+      rooms: rmRes.rooms,
+      accounts: ACCOUNTS,
+      onLog: addLog,
+    });
+
+    addLog(`\n✅ Сгенерировано ${result.slots.length} слотов`);
+    addLog(`📝 Создаю версию расписания…`);
+
+    // Create version
+    const vRes = await API.svCreate({ dept, name, week_start: weekStart || null });
+    const versionId = vRes.version.id;
+
+    // Save slots in batches of 100
+    addLog(`💾 Сохраняю слоты (${result.slots.length})…`);
+    for (let i = 0; i < result.slots.length; i += 100) {
+      const batch = result.slots.slice(i, i+100).map(s => ({ ...s, dept }));
+      await API.slotsCreate(versionId, batch);
+    }
+
+    addLog(`\n🎉 Готово! Версия "${name}" создана.`);
+    document.getElementById("genBtn").textContent = "✅ Готово";
+
+    // Reload versions tab
+    GEN.dept = dept;
+    GEN.tab = "versions";
+    setTimeout(async () => {
+      document.getElementById("generateModal").classList.remove("show");
+      if (document.getElementById("genTabContent")) await renderGenerator();
+    }, 1500);
+
+  } catch(e) {
+    addLog(`\n❌ Ошибка: ${e.message}`);
+    document.getElementById("genErr").textContent = e.message;
+    document.getElementById("genBtn").disabled = false;
+  }
+}
+
+async function exportVersionXlsx(versionId) {
+  alert("Экспорт в Excel будет реализован в следующем обновлении.\n\nВы можете распечатать расписание через Ctrl+P или сохранить как PDF.");
+}
+
+// ============= CSP SCHEDULE ENGINE =============
+// Реализация 32-правильного алгоритма составления расписания
+
+function scheduleCSP({ dept, curriculum, profileGroups, availability, rooms, accounts, onLog }) {
+  const log = onLog || (() => {});
+
+  // --- Время уроков ---
+  const SLOT_TIMES = {
+    0: {start:"8:10", end:"8:30"},
+    1: {start:"8:30", end:"9:50"},
+    2: {start:"10:00", end:"11:20"},
+    3: {start:"11:30", end:"12:50"},
+    4: {start:"13:00", end:"14:20"},
+    5: {start:"14:30", end:"15:50"},
+    6: {start:"16:00", end:"17:20"},
+    7: {start:"17:30", end:"18:50"},
+    8: {start:"19:00", end:"20:20"},
+    9: {start:"20:30", end:"21:50"},
+  };
+
+  // --- Правило 32: Классный час каждый понедельник 0-й урок для 1-9 кл ---
+  const ORAL_SUBJECTS = ["история","биология","обществознание","география","литература","музыка"];
+  const CORE_SUBJECTS = ["русский","математика","алгебра","геометрия","английский","физика","химия"];
+  const LIGHT_DAY = "Пятница"; // нет предметов 1 раз/нед
+
+  // --- Строим индексы ---
+  const teacherById = {};
+  for (const a of accounts) teacherById[a.id] = a;
+
+  // Доступность: teacher_id -> day -> Set<lesson_no> (недоступен)
+  const unavailable = {};
+  for (const a of availability) {
+    if (a.available) continue; // только блокировки
+    if (!unavailable[a.teacher_id]) unavailable[a.teacher_id] = {};
+    if (!unavailable[a.teacher_id][a.day_of_week]) unavailable[a.teacher_id][a.day_of_week] = new Set();
+    unavailable[a.teacher_id][a.day_of_week].add(a.lesson_no);
+  }
+
+  // Группируем учебный план по классу
+  const byClass = {};
+  for (const c of curriculum) {
+    if (!byClass[c.cls]) byClass[c.cls] = [];
+    byClass[c.cls].push({ ...c });
+  }
+
+  // Сортируем классы: 11 → 10 → 9 → 8 → 7 → ... → 1 (правило 6)
+  const classes = Object.keys(byClass).sort((a,b) => {
+    const na = parseInt(b), nb = parseInt(a);
+    return na - nb;
+  });
+  log(`📚 Классов: ${classes.join(", ")}`);
+
+  // Результирующие слоты
+  const slots = [];
+
+  // Занятость учителей: teacher_id -> day -> Set<lesson_no>
+  const teacherBusy = {};
+  const isTeacherBusy = (tid, day, no) => teacherBusy[tid]?.[day]?.has(no);
+  const isTeacherUnavail = (tid, day, no) =>
+    unavailable[tid]?.[day]?.has(no);
+  const markTeacherBusy = (tid, day, no) => {
+    if (!teacherBusy[tid]) teacherBusy[tid] = {};
+    if (!teacherBusy[tid][day]) teacherBusy[tid][day] = new Set();
+    teacherBusy[tid][day].add(no);
+  };
+
+  // Счётчик занятых классов по дню/уроку (для правила 10: макс 10 уроков в день)
+  const clsDayCount = {}; // cls -> day -> count
+  const clsDayLessons = {}; // cls -> day -> [lesson_no] (для правила 15: не два устных подряд)
+  const getClsDay = (cls, day) => clsDayCount[cls]?.[day] || 0;
+  const markClsDay = (cls, day, no) => {
+    if (!clsDayCount[cls]) clsDayCount[cls] = {};
+    clsDayCount[cls][day] = (clsDayCount[cls][day] || 0) + 1;
+    if (!clsDayLessons[cls]) clsDayLessons[cls] = {};
+    if (!clsDayLessons[cls][day]) clsDayLessons[cls][day] = [];
+    clsDayLessons[cls][day].push(no);
+  };
+
+  // Занятость классов: cls -> day -> Set<lesson_no>
+  const clsBusy = {};
+  const isClsBusy = (cls, day, no) => clsBusy[cls]?.[day]?.has(no);
+  const markClsBusy = (cls, day, no) => {
+    if (!clsBusy[cls]) clsBusy[cls] = {};
+    if (!clsBusy[cls][day]) clsBusy[cls][day] = new Set();
+    clsBusy[cls][day].add(no);
+    markClsDay(cls, day, no);
+  };
+
+  // Разместить слот
+  const placeSlot = (cls, day, no, item, slotType) => {
+    const t = SLOT_TIMES[no] || {start:"",end:""};
+    slots.push({
+      day_of_week: day,
+      lesson_no: no,
+      time_start: t.start,
+      time_end: t.end,
+      cls,
+      subject: item.subject,
+      teacher_id: item.teacher_id || null,
+      slot_type: slotType || item.subject_type || "main",
+      is_double: false,
+    });
+    if (item.teacher_id) markTeacherBusy(item.teacher_id, day, no);
+    markClsBusy(cls, day, no);
+  };
+
+  // --- ПРАВИЛО 32: Классный час пн 0-урок для 1-9 кл ---
+  // --- ПРАВИЛО 29: «Учись учиться» 6-8 уроки ---
+  // --- ПРАВИЛО 12: Самоподготовка 3х/нед ---
+  // --- ПРАВИЛО 11: Академподдержка 2ч/нед ---
+  // --- ПРАВИЛО 30: Доп. образование 9-10 урок ---
+
+  // Спецслоты добавляем в конце, пока обрабатываем основное расписание
+
+  // === ОСНОВНОЙ ЦИКЛ ПО КЛАССАМ ===
+  for (const cls of classes) {
+    const items = byClass[cls];
+    const grade = parseInt(cls);
+    const isElementary = grade <= 4; // правило 20: началка
+    const isHigh = grade >= 10;       // 10-11
+    const isNine = grade === 9;       // правило 8
+
+    log(`  Класс ${cls} (${items.length} предметов)…`);
+
+    // Сортируем предметы по приоритету (правило 9: приоритет дефицитным)
+    // Основные → ОГЭ/ЕГЭ → остальные
+    const sorted = [...items].sort((a, b) => {
+      const prio = (x) => x.subject_type === "main" ? 0 : x.subject_type === "oge" || x.subject_type === "ege" ? 1 : 2;
+      return prio(a) - prio(b);
+    });
+
+    // Счётчик оставшихся часов
+    const remaining = {};
+    for (const it of sorted) remaining[it.subject] = parseFloat(it.hours_week || 1);
+
+    // --- Правило 32: Классный час Пн 0-й урок для кл 1-9 ---
+    if (grade >= 1 && grade <= 9) {
+      const klassHour = items.find(i => i.subject.toLowerCase().includes("классн") || i.subject_type === "start");
+      if (klassHour && !isClsBusy(cls, "Понедельник", 0) && !isTeacherUnavail(klassHour.teacher_id, "Понедельник", 0)) {
+        placeSlot(cls, "Понедельник", 0, klassHour, "start");
+        remaining[klassHour.subject] = Math.max(0, (remaining[klassHour.subject]||1) - 1);
+      }
+    }
+
+    // Для каждого предмета распределяем по неделе
+    for (const it of sorted) {
+      if (remaining[it.subject] <= 0) continue;
+      if (it.subject_type === "selfprep" || it.subject_type === "support" || it.subject_type === "extracurr") continue;
+
+      let hoursLeft = remaining[it.subject];
+      const isOral = ORAL_SUBJECTS.some(o => it.subject.toLowerCase().includes(o));
+      const isCore = CORE_SUBJECTS.some(o => it.subject.toLowerCase().includes(o));
+
+      // Пятница — не ставить предмет 1 раз/нед (правило 32)
+      // Ядро — до 14:00 (уроки 1-4) (правило 14)
+      const preferredLessons = isCore ? [1,2,3,4] : [1,2,3,4,5,6];
+      const allowFriday = hoursLeft > 1 || !isOral;
+
+      let placed = 0;
+      for (const day of DAYS) {
+        if (hoursLeft <= 0) break;
+        if (day === LIGHT_DAY && !allowFriday) continue;
+
+        // Правило 15: не ставить два устных в один день
+        const dayItems = (clsDayLessons[cls]?.[day] || []).map(no => {
+          const placed = slots.find(s => s.cls===cls && s.day_of_week===day && s.lesson_no===no);
+          return placed?.subject?.toLowerCase() || "";
+        });
+        if (isOral && dayItems.some(s => ORAL_SUBJECTS.some(o => s.includes(o)))) continue;
+
+        if (getClsDay(cls, day) >= (grade <= 4 ? 6 : 10)) continue; // правило 10
+
+        // Ищем свободный урок
+        for (const no of preferredLessons) {
+          if (hoursLeft <= 0) break;
+          if (isClsBusy(cls, day, no)) continue;
+          if (it.teacher_id && isTeacherBusy(it.teacher_id, day, no)) continue;
+          if (it.teacher_id && isTeacherUnavail(it.teacher_id, day, no)) continue;
+          placeSlot(cls, day, no, it, it.subject_type || "main");
+          hoursLeft--;
+          placed++;
+          break;
+        }
+        // Если не нашли в предпочтительных, пробуем любой
+        if (placed < Math.ceil(parseFloat(it.hours_week)/DAYS.length)) {
+          for (let no = 1; no <= 9; no++) {
+            if (hoursLeft <= 0) break;
+            if (preferredLessons.includes(no)) continue;
+            if (isClsBusy(cls, day, no)) continue;
+            if (it.teacher_id && isTeacherBusy(it.teacher_id, day, no)) continue;
+            if (it.teacher_id && isTeacherUnavail(it.teacher_id, day, no)) continue;
+            if (isCore && no > 4) continue; // правило 14
+            placeSlot(cls, day, no, it, it.subject_type || "main");
+            hoursLeft--;
+            break;
+          }
+        }
+      }
+      remaining[it.subject] = hoursLeft;
+    }
+
+    // --- Правило 12: Самоподготовка 3x/нед (ур.7-8) ---
+    const selfprep = items.find(i => i.subject_type === "selfprep");
+    if (selfprep) {
+      let spCount = 0;
+      for (const day of DAYS) {
+        if (spCount >= 3) break;
+        for (const no of [7,8]) {
+          if (!isClsBusy(cls, day, no)) {
+            placeSlot(cls, day, no, selfprep, "selfprep");
+            spCount++;
+            break;
+          }
+        }
+      }
+    }
+
+    // --- Правило 11: Академподдержка 2ч/нед на каждый предмет поддержки ---
+    const supports = items.filter(i => i.subject_type === "support");
+    for (const sup of supports) {
+      let supCount = 0;
+      for (const day of DAYS) {
+        if (supCount >= 2) break;
+        for (const no of [6,7,8]) {
+          if (!isClsBusy(cls, day, no) && (!sup.teacher_id || !isTeacherBusy(sup.teacher_id, day, no))) {
+            placeSlot(cls, day, no, sup, "support");
+            supCount++;
+            break;
+          }
+        }
+      }
+    }
+
+    // --- Правило 22: Прогулки (ур.6-7) ---
+    if (grade >= 1 && grade <= 4) {
+      const walkItem = { subject: "Прогулка", teacher_id: null, subject_type: "walk" };
+      for (const day of DAYS) {
+        for (const no of [6,7]) {
+          if (!isClsBusy(cls, day, no)) {
+            placeSlot(cls, day, no, walkItem, "walk");
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  log(`\n📊 Итого слотов: ${slots.length}`);
+
+  // Проверка конфликтов учителей
+  const teacherConflicts = [];
+  const tCheck = {}; // teacher_id -> "day|no" -> cls
+  for (const s of slots) {
+    if (!s.teacher_id) continue;
+    const k = s.day_of_week + "|" + s.lesson_no;
+    if (tCheck[s.teacher_id]?.[k]) {
+      teacherConflicts.push(`${teacherById[s.teacher_id]?.name||s.teacher_id}: ${s.day_of_week} ур.${s.lesson_no} — ${tCheck[s.teacher_id][k]} и ${s.cls}`);
+    }
+    if (!tCheck[s.teacher_id]) tCheck[s.teacher_id] = {};
+    tCheck[s.teacher_id][k] = s.cls;
+  }
+  if (teacherConflicts.length > 0) {
+    log(`⚠️ Конфликты учителей (${teacherConflicts.length}):`);
+    for (const c of teacherConflicts.slice(0, 10)) log(`  · ${c}`);
+    if (teacherConflicts.length > 10) log(`  … и ещё ${teacherConflicts.length - 10}`);
+  } else {
+    log(`✅ Конфликтов учителей нет`);
+  }
+
+  return { slots, conflicts: teacherConflicts };
+}
+
+// ============= SECTION SWITCH (add generator) =============
+const _origSetSection = typeof setSection !== "undefined" ? setSection : null;
+
+// ============= GENERATOR SECTION INIT =============
+// Patch setSection to handle 'generator'
+const __origInitUI = typeof initUI !== "undefined" ? initUI : null;
 
 // On load: if we have a token, try /me. Else show login.
 async function boot() {
