@@ -327,7 +327,7 @@ td.has-conflict::after { content: "⚠"; float: right; color: var(--conflict-bor
 .conflict-item { font-size: 12px; padding: 4px 0; color: #7F1D1D; }
 
 /* Stats */
-.stats-row { display: flex; gap: 12px; margin-bottom: 16px; }
+.stats-row { display: flex; gap: 12px; margin-bottom: 16px; width: 100%; flex-wrap: wrap; }
 .stat-card {
   flex: 1; min-width: 140px; background: var(--card); border-radius: 14px;
   padding: 16px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
@@ -471,16 +471,19 @@ body.edit-mode table.schedule td { position: relative; }
 .click-link:hover { text-decoration: underline; text-decoration-color: var(--ip-cyan); }
 
 /* Section containers — always full width */
-[id^="section"] { width: 100%; box-sizing: border-box; }
+[id^="section"] { display: block; width: 100%; box-sizing: border-box; }
 
 /* Today section */
 .today-greeting {
+  display: block;
+  width: 100%;
   background: linear-gradient(135deg, var(--ip-blue) 0%, #0091d4 100%);
   border-radius: 16px;
   padding: 22px 26px;
   margin-bottom: 16px;
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
 }
 .today-greeting::before {
   content: '';
@@ -625,23 +628,15 @@ body.edit-mode table.schedule td { position: relative; }
   .user-role { display: none; }
   .user-chip { padding: 3px 6px 3px 3px; gap: 4px; }
 
-  /* Section nav: horizontal scroll on mobile, no wrap/collapse */
-  .section-nav-wrap::after {
-    content: '';
-    position: absolute; top: 0; right: 0;
-    width: 32px; height: 100%;
-    background: linear-gradient(to right, transparent, var(--bg));
-    pointer-events: none;
-    border-radius: 0 8px 8px 0;
-  }
+  /* Section nav: wrap + collapse on mobile same as desktop */
+  .section-nav-wrap::after { display: none; }
   .section-nav {
-    gap: 5px; overflow-x: auto; padding-bottom: 4px;
-    flex-wrap: nowrap; scrollbar-width: none; margin-bottom: 8px;
-    max-height: none !important; overflow-y: visible !important;
+    gap: 5px; padding-bottom: 4px;
+    flex-wrap: wrap; margin-bottom: 8px;
   }
-  .section-nav::-webkit-scrollbar { display: none; }
-  .section-nav.nav-collapsed { max-height: none !important; overflow: visible !important; }
-  .nav-toggle-btn { display: none !important; }
+  .section-nav.nav-collapsed {
+    max-height: 48px; overflow: hidden;
+  }
   .section-btn {
     padding: 7px 10px; font-size: 11px; font-weight: 600;
     white-space: nowrap; flex-shrink: 0; gap: 4px; border-radius: 8px;

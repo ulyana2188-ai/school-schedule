@@ -1475,8 +1475,12 @@ function initNavToggle() {
   const btn = document.getElementById("navToggleBtn");
   const nav = document.querySelector(".section-nav");
   if (!btn || !nav) return;
-  // Only show toggle for head/director (they have many tabs)
-  if (!_isNavRole()) { btn.style.display = "none"; nav.classList.remove("nav-collapsed"); return; }
+  // Show toggle for head/director; also for teachers on small screens (many tabs)
+  const isMobile = window.innerWidth <= 768;
+  const visibleBtns = Array.from(nav.querySelectorAll(".section-btn:not(#navToggleBtn)")).filter(b => b.style.display !== "none");
+  if (!_isNavRole() && !isMobile && visibleBtns.length <= 5) {
+    btn.style.display = "none"; nav.classList.remove("nav-collapsed"); return;
+  }
   btn.style.display = "";
   const expanded = (() => { try { return localStorage.getItem("ip_nav_expanded") === "1"; } catch(e) { return false; } })();
   if (expanded) { nav.classList.remove("nav-collapsed"); } else { nav.classList.add("nav-collapsed"); }
@@ -1675,7 +1679,7 @@ function renderToday() {
   const _isAdminRole = u.role === 'head' || u.role === 'director';
   const _rawFirst = u.first_name || (!_isAdminRole ? (u.name || '').split(' ')[0] : null) || u.name;
   const _firstName = escapeHtml(_rawFirst);
-  let html = `<div class="today-greeting">
+  let html = `<div class="today-greeting" style="display:block;width:100%;box-sizing:border-box;">
     <h2>${_greetWord}, ${_firstName}!</h2>
     <div class="day-of-week">Сегодня ${escapeHtml(dateStr)}</div>
   </div>`;
@@ -1734,7 +1738,7 @@ function renderToday() {
     // Count absent today without a replacement
     const _absentToday = ABSENCES.filter(a => a.start_date <= today && a.end_date >= today);
     const _absentNoCover = _absentToday.filter(a => !ALL_REPLACEMENTS.some(r => r.day === today && r.absent_name === a.user_name));
-    html += `<div class="stats-row">
+    html += `<div class="stats-row" style="display:flex;width:100%;box-sizing:border-box;">
       <div class="stat-card cyan"><div class="label">📚 Уроков сегодня</div><div class="value">${countToday}</div></div>
       <div class="stat-card magenta"><div class="label">🔄 Замен сегодня</div><div class="value">${_repsToday}</div></div>
       <div class="stat-card ${CONFLICTS.length > 0 ? 'red' : ''}"><div class="label">⚠️ Конфликтов</div><div class="value">${CONFLICTS.length}</div></div>
