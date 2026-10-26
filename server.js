@@ -106,7 +106,7 @@ app.get("/api/me", authMiddleware, async (req, res) => {
 // === Accounts list ===
 app.get("/api/accounts", authMiddleware, async (req, res) => {
   const r = await db.query(
-    "SELECT id, email, name, role, title, dept, depts, subjects FROM users ORDER BY role DESC, name"
+    "SELECT id, email, name, role, title, dept, depts, subjects, COALESCE(is_active, TRUE) as is_active FROM users ORDER BY role DESC, name"
   );
   res.json({ accounts: r.rows });
 });
@@ -951,10 +951,30 @@ app.post("/api/admin/users/:id/reset-password", authMiddleware, requireHead, asy
   res.json({ ok: true });
 });
 
-// Delete (soft — only if no replacements; otherwise just block via app logic)
+// Archive (deactivate) user — preserves history
+app.post("/api/admin/users/:id/archive", authMiddleware, requireHead, async (req, res) => {
+  await db.query("UPDATE users SET is_active=FALSE WHERE id=$1", [parseInt(req.params.id)]);
+  res.json({ ok: true });
+});
+// Restore (reactivate) user
+app.post("/api/admin/users/:id/restore", authMiddleware, requireHead, async (req, res) => {
+  await db.query("UPDATE users SET is_active=TRUE WHERE id=$1", [parseInt(req.params.id)]);
+  res.json({ ok: true });
+});
+// Hard delete — only for users with no history (no replacements)
 app.delete("/api/admin/users/:id", authMiddleware, requireHead, async (req, res) => {
   const id = parseInt(req.params.id);
   try {
+    // Check for history
+    const hist = await db.query(
+      "SELECT 1 FROM replacements WHERE absent_user_id=$1 OR replacement_user_id=$1 OR created_by=$1 LIMIT 1",
+      [id]
+    );
+    if (hist.rows.length > 0) {
+      // Has history — soft-archive instead of hard delete
+      await db.query("UPDATE users SET is_active=FALSE WHERE id=$1", [id]);
+      return res.json({ ok: true, archived: true });
+    }
     await db.query("DELETE FROM notifications WHERE to_user_id=$1", [id]);
     await db.query("DELETE FROM users WHERE id=$1", [id]);
     res.json({ ok: true });
@@ -1469,7 +1489,8 @@ app.get("/api/absence-requests/suggest-replacements", authMiddleware, async (req
   // Get all teachers in same dept (excluding absent teacher)
   const teachers = await db.query(
     `SELECT id, name, subjects, dept, depts FROM users
-     WHERE role='teacher' AND (dept=$1 OR $1=ANY(depts)) AND id != $2`,
+     WHERE role='teacher' AND COALESCE(is_active, TRUE) = TRUE
+       AND (dept=$1 OR $1=ANY(depts)) AND id != $2`,
     [dept, teacher_id]
   );
 

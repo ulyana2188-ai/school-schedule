@@ -21,6 +21,9 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='title') THEN
     ALTER TABLE users ADD COLUMN title TEXT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_active') THEN
+    ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
+  END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));

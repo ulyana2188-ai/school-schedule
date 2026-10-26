@@ -42,6 +42,8 @@ const API = {
   adminUpdateUser(id, d) { return this.fetch(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(d) }); },
   adminResetPwd(id) { return this.fetch(`/api/admin/users/${id}/reset-password`, { method: "POST" }); },
   adminDeleteUser(id) { return this.fetch(`/api/admin/users/${id}`, { method: "DELETE" }); },
+  adminArchiveUser(id) { return this.fetch(`/api/admin/users/${id}/archive`, { method: "POST" }); },
+  adminRestoreUser(id) { return this.fetch(`/api/admin/users/${id}/restore`, { method: "POST" }); },
   // Schedule edits
   saveEdit(d) { return this.fetch("/api/schedule/edits", { method: "POST", body: JSON.stringify(d) }); },
   revertEdit(dept, day, lkey, cls) { return this.fetch(`/api/schedule/edits/${encodeURIComponent(dept)}/${encodeURIComponent(day)}/${encodeURIComponent(lkey)}/${encodeURIComponent(cls)}`, { method: "DELETE" }); },
@@ -1396,14 +1398,22 @@ function renderHistory() {
 }
 
 // ============= ADMIN PANEL =============
+let _adminShowArchived = false;
 function renderAdmin() {
   const root = document.getElementById("sectionAdmin");
   if (CURRENT_USER.role !== "head") { root.innerHTML = `<div class="history-empty">Раздел доступен только завучам</div>`; return; }
 
   const myDepts = getMyAllowedDepts();
+  const active = ACCOUNTS.filter(a => a.is_active !== false);
+  const archived = ACCOUNTS.filter(a => a.is_active === false);
+  const shown = _adminShowArchived ? archived : active;
+
   let html = `<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
     <h3 style="margin:0;">Сотрудники школы</h3>
-    <div style="color:var(--text-muted);font-size:12px;">${ACCOUNTS.length} аккаунтов</div>
+    <div class="view-switch" style="margin-left:8px;">
+      <button class="${!_adminShowArchived?'active':''}" onclick="_adminShowArchived=false;renderAdmin()">Активные (${active.length})</button>
+      <button class="${_adminShowArchived?'active':''}" onclick="_adminShowArchived=true;renderAdmin()">Уволенные (${archived.length})</button>
+    </div>
     <div style="flex:1;"></div>
     <label class="btn secondary" style="cursor:pointer;margin:0;">
       ⤴ Импорт расписания (Excel)
@@ -1412,26 +1422,57 @@ function renderAdmin() {
     <select id="importDept" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:white;">
       ${myDepts.map(d => `<option value="${d}">${d}</option>`).join("")}
     </select>
-    <button class="btn" onclick="openAdminUserNew()">+ Добавить сотрудника</button>
-  </div>
-  <div class="admin-list">
+    <button class="btn" onclick="openAdminUserNew()">+ Новый сотрудник</button>
+  </div>`;
+
+  if (shown.length === 0) {
+    html += `<div class="history-empty">${_adminShowArchived ? "Нет уволенных сотрудников" : "Нет активных сотрудников"}</div>`;
+  } else {
+    html += `<div class="admin-list">
     <div class="admin-row header-row">
       <div></div><div>ФИО</div><div>Логин</div><div>Должность</div><div>Отделения</div><div></div>
     </div>`;
-  const sorted = ACCOUNTS.slice().sort((a,b) => (a.role===b.role?0:a.role==="head"?-1:1) || a.name.localeCompare(b.name, "ru"));
-  for (const a of sorted) {
-    const titleDisplay = a.title || (a.role === "head" ? "Руководитель отделения" : "Учитель");
-    html += `<div class="admin-row">
-      <div class="um-av ${avatarColor(a.name)}">${getInitials(a.name)}</div>
-      <div><b>${escapeHtml(a.name)}</b></div>
-      <div style="font-family:ui-monospace,monospace;color:var(--ip-blue);font-size:11px;">${escapeHtml(a.email)}</div>
-      <div>${escapeHtml(titleDisplay)}</div>
-      <div>${(a.depts || []).join(", ") || (a.dept || '')}</div>
-      <div><button class="edit-btn" onclick='openAdminUserEdit(${a.id})'>✎</button></div>
-    </div>`;
+    const sorted = shown.slice().sort((a,b) => (a.role===b.role?0:a.role==="head"?-1:1) || a.name.localeCompare(b.name, "ru"));
+    for (const a of sorted) {
+      const titleDisplay = a.title || (a.role === "head" ? "Руководитель отделения" : "Учитель");
+      const isArchived = a.is_active === false;
+      html += `<div class="admin-row" style="${isArchived ? 'opacity:.6;' : ''}">
+        <div class="um-av ${avatarColor(a.name)}" style="${isArchived ? 'filter:grayscale(1);' : ''}">${getInitials(a.name)}</div>
+        <div><b>${escapeHtml(a.name)}</b>${isArchived ? `<span style="color:var(--ip-magenta);font-size:10px;margin-left:6px;">уволен</span>` : ''}</div>
+        <div style="font-family:ui-monospace,monospace;color:var(--ip-blue);font-size:11px;">${escapeHtml(a.email)}</div>
+        <div>${escapeHtml(titleDisplay)}</div>
+        <div>${(a.depts || []).join(", ") || (a.dept || '')}</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${isArchived
+            ? `<button class="btn secondary" style="padding:3px 10px;font-size:11px;" onclick="restoreUser(${a.id})">↩ Восстановить</button>`
+            : `<button class="btn secondary" style="padding:3px 10px;font-size:11px;color:var(--ip-magenta);" onclick="archiveUser(${a.id},'${escapeHtml(a.name)}')">✗ Уволить</button>`
+          }
+          <button class="edit-btn" onclick='openAdminUserEdit(${a.id})'>✎</button>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
   }
-  html += `</div>`;
   root.innerHTML = html;
+}
+
+async function archiveUser(id, name) {
+  if (!confirm(`Уволить «${name}»?\n\nАккаунт будет деактивирован. История замен сохранится. Восстановить можно в любой момент.`)) return;
+  try {
+    await API.adminArchiveUser(id);
+    await reloadAccounts();
+    renderAdmin();
+    showToast(`${name} переведён в уволенные`);
+  } catch (e) { alert("Ошибка: " + e.message); }
+}
+async function restoreUser(id) {
+  try {
+    await API.adminRestoreUser(id);
+    await reloadAccounts();
+    _adminShowArchived = false;
+    renderAdmin();
+    showToast("Сотрудник восстановлен");
+  } catch (e) { alert("Ошибка: " + e.message); }
 }
 
 function openAdminUserNew() {
@@ -1495,11 +1536,15 @@ async function resetUserPassword() {
 }
 async function deleteUser() {
   if (!window._editingUserId) return;
-  if (!confirm("Удалить аккаунт? Это действие нельзя отменить.")) return;
+  if (!confirm("Удалить аккаунт?\n\nЕсли у сотрудника есть история замен — аккаунт будет деактивирован (не удалён). Иначе — удалён полностью.")) return;
   try {
-    await API.adminDeleteUser(window._editingUserId);
+    const r = await API.adminDeleteUser(window._editingUserId);
     document.getElementById("adminUserModal").classList.remove("show");
     await reloadAccounts();
+    if (r.archived) {
+      showToast("Аккаунт деактивирован (есть история)");
+      _adminShowArchived = true;
+    }
     renderAdmin();
   } catch(e) { alert("Ошибка: " + e.message); }
 }
