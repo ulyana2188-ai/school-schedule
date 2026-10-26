@@ -2155,6 +2155,8 @@ async function bootstrap() {
     // Migrations
     await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(50)");
     await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS schedule_name VARCHAR(120)");
+    // Promote admin-imperial to director role
+    await db.query("UPDATE users SET role='director' WHERE email='admin-imperial' AND role='head'");
     console.log("Schema OK.");
 
     // Auto-seed if users table is empty
