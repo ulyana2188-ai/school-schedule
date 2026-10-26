@@ -551,110 +551,241 @@ app.post("/api/schedule/import", authMiddleware, requireHead, upload.single("fil
 // === Full schedule import (saves to schedule_overrides, replaces base schedule.json for dept) ===
 
 // Helper: parse xlsx into a full schedule object { classes, schedule }
-// Supports two formats:
-//   FLAT: headers Класс | День | Урок | Время | Предмет | Учитель | Кабинет (one row per lesson)
-//   GRID: days as section labels, class columns (existing format)
+// Smart multi-strategy parser:
+//   1. FLAT: any header row containing class/day/subject columns (fuzzy matching)
+//   2. GRID: day section headers + class columns ("1 класс", "5а", "7б" etc.)
+//   3. TRANSPOSED: classes as rows, days/lessons as columns
+//   4. DAILY: sheet-per-day (each sheet named after a day)
 function parseFullScheduleSheet(workbook, dept) {
   const DAYS_MAP = {
     "понедельник": "Понедельник", "вторник": "Вторник", "среда": "Среда",
-    "четверг": "Четверг", "пятница": "Пятница"
+    "четверг": "Четверг", "пятница": "Пятница",
+    "пн": "Понедельник", "вт": "Вторник", "ср": "Среда", "чт": "Четверг", "пт": "Пятница",
+    "monday": "Понедельник", "tuesday": "Вторник", "wednesday": "Среда",
+    "thursday": "Четверг", "friday": "Пятница",
   };
   const HEADER_KEYS = {
-    cls: ["класс","группа","кл","class"],
-    day: ["день","day","дата"],
-    lesson_no: ["урок","№","номер","lesson","no","num","п/п"],
-    time: ["время","time","часы"],
-    subject: ["предмет","дисциплина","subject","занятие"],
-    teacher: ["учитель","педагог","преподаватель","учитель"],
-    room: ["кабинет","ауд","room","кааудитория","аудитория","зал"],
+    cls: ["класс","группа","кл","class","group"],
+    day: ["день","day","дата","weekday"],
+    lesson_no: ["урок","№","номер","lesson","no","num","п/п","#","slot"],
+    time: ["время","time","часы","час"],
+    subject: ["предмет","дисциплина","subject","занятие","название"],
+    teacher: ["учитель","педагог","преподаватель","teacher","ф.и.о","фио"],
+    room: ["кабинет","ауд","room","аудитория","зал","каб"],
   };
+
+  // Fuzzy match: does string contain any of the synonyms?
+  function matchHeader(val, synonyms) {
+    if (!val) return false;
+    const v = String(val).toLowerCase().trim();
+    return synonyms.some(s => v.includes(s));
+  }
+
+  // Detect if a value looks like a class name: "1", "1а", "5б", "10", "11", "7А", "2-й" etc
+  function isClassName(v) {
+    if (!v) return false;
+    const s = String(v).trim();
+    return /^((\d{1,2})\s*[а-яёА-ЯЁa-zA-Z]?\s*(кл\.?|класс)?)$/.test(s) ||
+           /^(группа\s+)?(\d{1,2}[а-яёА-ЯЁ]?)$/.test(s);
+  }
+
+  // Normalize class name to bare form: "5 класс" -> "5", "10а класс" -> "10а"
+  function normalizeClass(v) {
+    return String(v).trim().replace(/\s*(класс|кл\.?)\s*$/i, "").trim();
+  }
+
+  // Detect day name in a string
+  function detectDay(v) {
+    if (!v) return null;
+    const low = String(v).toLowerCase().trim();
+    return DAYS_MAP[low] || null;
+  }
+
+  // Detect lesson number (1-14)
+  function detectLessonNo(v) {
+    if (v === null || v === undefined) return null;
+    const sv = String(v).trim();
+    if (/^\d{1,2}$/.test(sv)) {
+      const n = parseInt(sv);
+      if (n >= 1 && n <= 14) return n;
+    }
+    return null;
+  }
+
+  // Detect time range like "8:30-9:15" or "8.30—9.15"
+  function detectTime(v) {
+    if (!v) return null;
+    const sv = String(v).trim();
+    if (/\d{1,2}[.:]\d{2}\s*[-—–]\s*\d{1,2}[.:]\d{2}/.test(sv)) return sv;
+    return null;
+  }
 
   const classSet = new Set();
   // lessons: array of { cls, day, lesson_no, time, subject, teacher, room }
   const lessons = [];
+
+  // Extract subject + optional teacher from a cell value
+  function extractSubjectTeacher(cellVal) {
+    if (!cellVal) return null;
+    const text = String(cellVal).trim();
+    if (!text) return null;
+    const lines = text.split(/\n|\\n/);
+    const firstLine = lines[0].trim();
+    // Try: "Математика Иванова А.В." — teacher name at end
+    const teacherMatch = text.match(/^(.+?)\s+([А-ЯЁ][а-яё]+(ов|ова|ев|ева|ин|ина|ый|ая|ий|ья)?\s+[А-ЯЁ]\.?\s*[А-ЯЁ]?\.?)\s*$/);
+    if (lines.length >= 2) {
+      return { subject: firstLine, teacher: lines.slice(1).map(l => l.trim()).filter(Boolean).join(", ") || null };
+    } else if (teacherMatch) {
+      return { subject: teacherMatch[1].trim(), teacher: teacherMatch[2].trim() };
+    }
+    return { subject: firstLine, teacher: null };
+  }
 
   for (const sheetName of workbook.SheetNames) {
     const ws = workbook.Sheets[sheetName];
     const rows = xlsx.utils.sheet_to_json(ws, { header: 1, defval: null });
     if (!rows.length) continue;
 
-    // Detect format: look for flat header row
-    let flatColMap = null; // { cls, day, lesson_no, time, subject, teacher, room } -> colIdx
-    for (let r = 0; r < Math.min(rows.length, 5); r++) {
-      const row = (rows[r] || []).map(c => c == null ? "" : String(c).toLowerCase().trim());
+    // Check if sheet name is a day name (DAILY format: each sheet = one day)
+    const sheetDay = detectDay(sheetName);
+
+    // ── Strategy 1: FLAT format (header row with column names) ──────────────
+    let flatColMap = null;
+    for (let r = 0; r < Math.min(rows.length, 8); r++) {
+      const row = rows[r] || [];
+      if (row.every(c => !c)) continue;
       const found = {};
       for (const [key, syns] of Object.entries(HEADER_KEYS)) {
         for (let c = 0; c < row.length; c++) {
-          if (syns.some(s => row[c].includes(s))) { found[key] = c; break; }
+          if (matchHeader(row[c], syns)) { found[key] = c; break; }
         }
       }
-      // Need at least cls + day + subject
-      if (found.cls !== undefined && found.day !== undefined && found.subject !== undefined) {
+      // Need at least subject and (cls or day)
+      const hasSubject = found.subject !== undefined;
+      const hasCls = found.cls !== undefined;
+      const hasDay = found.day !== undefined;
+      if (hasSubject && (hasCls || hasDay)) {
         flatColMap = found;
-        // Parse flat rows
+        let lastDay = sheetDay;
+        let lastCls = null;
         for (let i = r + 1; i < rows.length; i++) {
           const dr = rows[i];
-          if (!dr) continue;
-          const cls = dr[found.cls] != null ? String(dr[found.cls]).trim() : null;
-          const dayRaw = dr[found.day] != null ? String(dr[found.day]).toLowerCase().trim() : null;
+          if (!dr || dr.every(c => !c)) continue;
+          // Try to detect day (may appear only once per day block)
+          if (hasCls === false || !dr[found.cls]) {
+            const maybeDay = detectDay(dr[found.day != null ? found.day : 0]);
+            if (maybeDay) { lastDay = maybeDay; continue; }
+          }
+          const clsRaw = hasCls && dr[found.cls] != null ? normalizeClass(String(dr[found.cls]).trim()) : lastCls;
+          const dayRaw = hasDay && dr[found.day] != null ? detectDay(dr[found.day]) : lastDay;
           const subjRaw = dr[found.subject] != null ? String(dr[found.subject]).trim() : null;
-          if (!cls || !dayRaw || !subjRaw) continue;
-          const day = DAYS_MAP[dayRaw] || null;
-          if (!day) continue;
-          const lesson_no = found.lesson_no != null && dr[found.lesson_no] != null ? parseInt(dr[found.lesson_no]) : null;
-          const time = found.time != null && dr[found.time] != null ? String(dr[found.time]).trim() : null;
+          if (!clsRaw || !dayRaw || !subjRaw) continue;
+          if (clsRaw) lastCls = clsRaw;
+          const lesson_no = found.lesson_no != null ? detectLessonNo(dr[found.lesson_no]) : null;
+          const time = found.time != null ? detectTime(dr[found.time]) : null;
           const teacher = found.teacher != null && dr[found.teacher] != null ? String(dr[found.teacher]).trim() : null;
           const room = found.room != null && dr[found.room] != null ? String(dr[found.room]).trim() : null;
-          classSet.add(cls);
-          lessons.push({ cls, day, lesson_no, time, subject: subjRaw, teacher: teacher || null, room: room || null });
+          classSet.add(clsRaw);
+          lessons.push({ cls: clsRaw, day: dayRaw, lesson_no, time, subject: subjRaw, teacher: teacher || null, room: room || null });
         }
         break;
       }
     }
+    if (flatColMap) continue;
 
-    // If flat not found, try grid format
-    if (!flatColMap) {
-      let currentDay = null;
-      let classCols = {};
+    // ── Strategy 2: GRID format (day section headers + class columns) ────────
+    // Look for header row that has class names as column headers
+    let classCols = {}; // colIdx -> normalized class name
+    let currentDay = sheetDay;
+    let gridStarted = false;
+
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r] || [];
+
+      // Scan for class header row: row where multiple cells match class names
+      let classHeaderCount = 0;
+      const potentialCols = {};
+      for (let c = 0; c < row.length; c++) {
+        const v = row[c];
+        if (!v) continue;
+        if (isClassName(String(v).trim())) {
+          potentialCols[c] = normalizeClass(String(v).trim());
+          classHeaderCount++;
+        }
+      }
+      // If we found 2+ class names in a row — this is a class header row
+      if (classHeaderCount >= 2) {
+        Object.assign(classCols, potentialCols);
+        gridStarted = true;
+        continue;
+      }
+
+      // Detect day name in any cell
+      let dayFound = false;
+      for (let c = 0; c < row.length; c++) {
+        const d = detectDay(row[c]);
+        if (d) { currentDay = d; dayFound = true; break; }
+      }
+      if (dayFound && !Object.keys(classCols).length) continue;
+
+      // Extract lesson number + time from first few columns
+      let lessonNo = null, time = null;
+      for (let c = 0; c < Math.min(row.length, 6); c++) {
+        if (lessonNo === null) {
+          const n = detectLessonNo(row[c]);
+          if (n !== null) { lessonNo = n; continue; }
+        }
+        if (time === null) {
+          const t = detectTime(row[c]);
+          if (t) { time = t; continue; }
+        }
+      }
+
+      if (!currentDay || !Object.keys(classCols).length) continue;
+      if (lessonNo === null && !gridStarted) continue;
+
+      // Extract lessons from class columns
+      for (const c in classCols) {
+        const ci = parseInt(c);
+        const cellVal = row[ci];
+        if (!cellVal) continue;
+        const parsed = extractSubjectTeacher(cellVal);
+        if (!parsed || !parsed.subject) continue;
+        classSet.add(classCols[c]);
+        lessons.push({
+          cls: classCols[c], day: currentDay,
+          lesson_no: lessonNo, time,
+          subject: parsed.subject,
+          teacher: parsed.teacher || null,
+          room: null,
+        });
+      }
+    }
+
+    // ── Strategy 3: AUTO detect — no clear structure, scan for known patterns ──
+    // If nothing found yet from this sheet, try a more aggressive scan
+    if (lessons.length === 0) {
+      let scanDay = sheetDay;
       for (let r = 0; r < rows.length; r++) {
         const row = rows[r] || [];
-        let headerFound = false;
-        for (let c = 0; c < row.length; c++) {
-          const v = row[c];
-          if (!v) continue;
-          const m = String(v).match(/^\s*(\d{1,2}[а-яёА-ЯЁ]?)\s*(класс|кл\.?)?\s*$/i);
-          if (m) { classCols[c] = m[1]; headerFound = true; }
-        }
-        if (headerFound) continue;
+        // Look for day name
         for (const cell of row) {
-          if (!cell) continue;
-          const lower = String(cell).toLowerCase().trim();
-          if (DAYS_MAP[lower]) { currentDay = DAYS_MAP[lower]; break; }
+          const d = detectDay(cell);
+          if (d) { scanDay = d; break; }
         }
-        let lessonNo = null, time = null;
-        for (let c = 0; c < Math.min(row.length, 5); c++) {
-          const v = row[c];
-          if (v == null) continue;
-          const sv = String(v).trim();
-          if (/^\d{1,2}$/.test(sv) && parseInt(sv) >= 1 && parseInt(sv) <= 14) {
-            if (lessonNo === null) lessonNo = parseInt(sv);
-          } else if (/\d{1,2}[.:]\d{2}\s*[-—–]\s*\d{1,2}[.:]\d{2}/.test(sv)) {
-            time = sv;
-          }
-        }
-        if (lessonNo === null || !currentDay) continue;
-        for (const c in classCols) {
-          const cls = classCols[c];
-          const cellVal = row[c];
-          if (!cellVal) continue;
-          const text = String(cellVal).trim();
-          if (!text) continue;
-          // Split subject/teacher: "Математика Иванова А.В." or "Математика\nИванова А.В."
-          const lines = text.split(/\n/);
-          const subject = lines[0].trim();
-          const teacherMatch = (lines[1] || "").trim() || text.match(/^(.+?)\s+([А-ЯЁ][а-яё]+\s+[А-ЯЁ]\.?[А-ЯЁ]?\.?)\s*$/)?.[2] || null;
+        if (!scanDay) continue;
+        // Check if any cell looks like a class + find adjacent subject cells
+        for (let c = 0; c < row.length - 1; c++) {
+          if (!isClassName(row[c])) continue;
+          const cls = normalizeClass(String(row[c]).trim());
+          // Next cell might be subject
+          const nextVal = row[c + 1];
+          if (!nextVal) continue;
+          const parsed = extractSubjectTeacher(nextVal);
+          if (!parsed || !parsed.subject) continue;
+          const lessonNo = r > 0 ? detectLessonNo((rows[r - 1] || [])[c]) : null;
           classSet.add(cls);
-          lessons.push({ cls, day: currentDay, lesson_no: lessonNo, time, subject, teacher: teacherMatch || null, room: null });
+          lessons.push({ cls, day: scanDay, lesson_no: lessonNo, time: null, subject: parsed.subject, teacher: parsed.teacher, room: null });
         }
       }
     }
@@ -1135,6 +1266,325 @@ app.post("/api/generate", authMiddleware, requireHead, async (req, res) => {
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ============================================================
+// ABSENCE REQUESTS (teacher self-report sick / personal day)
+// ============================================================
+
+// GET /api/absence-requests — teacher sees own, head sees all in their depts
+app.get("/api/absence-requests", authMiddleware, async (req, res) => {
+  const u = await getUserById(req.userId);
+  let rows;
+  if (u.role === "head") {
+    const depts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
+    rows = await db.query(
+      `SELECT r.*, us.name as teacher_name, rv.name as reviewer_name
+       FROM absence_requests r
+       JOIN users us ON us.id = r.teacher_id
+       LEFT JOIN users rv ON rv.id = r.reviewed_by
+       WHERE r.dept = ANY($1)
+       ORDER BY r.created_at DESC LIMIT 200`,
+      [depts]
+    );
+  } else {
+    rows = await db.query(
+      `SELECT r.*, rv.name as reviewer_name
+       FROM absence_requests r
+       LEFT JOIN users rv ON rv.id = r.reviewed_by
+       WHERE r.teacher_id = $1 ORDER BY r.created_at DESC LIMIT 100`,
+      [req.userId]
+    );
+  }
+  res.json({ requests: rows.rows });
+});
+
+// POST /api/absence-requests — teacher submits their own absence
+app.post("/api/absence-requests", authMiddleware, async (req, res) => {
+  const u = await getUserById(req.userId);
+  const { start_date, end_date, kind, note } = req.body || {};
+  if (!start_date || !end_date || !kind) return res.status(400).json({ error: "bad_request" });
+  const dept = u.dept || (u.depts && u.depts[0]);
+  if (!dept) return res.status(400).json({ error: "no_dept" });
+  try {
+    const r = await db.query(
+      `INSERT INTO absence_requests (teacher_id, dept, start_date, end_date, kind, note, status)
+       VALUES ($1,$2,$3,$4,$5,$6,'pending') RETURNING *`,
+      [req.userId, dept, start_date, end_date, kind, note || null]
+    );
+    const req_ = r.rows[0];
+
+    // Also create a user_absence record immediately (optimistic)
+    await db.query(
+      `INSERT INTO user_absences (user_id, start_date, end_date, kind, note, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [req.userId, start_date, end_date, kind, note || null, req.userId]
+    );
+
+    // Notify all heads of this dept
+    const heads = await db.query(
+      "SELECT id FROM users WHERE role='head' AND (dept=$1 OR $1=ANY(depts))",
+      [dept]
+    );
+    const kindLabel = { sick: "больничный", personal: "личные обстоятельства", other: "отсутствие" }[kind] || kind;
+    const dateRange = start_date === end_date ? start_date : `${start_date} — ${end_date}`;
+    const title = `🤒 ${u.name} сообщает об отсутствии`;
+    const body = `${u.name} не выйдет на работу: ${dateRange}\nПричина: ${kindLabel}${note ? "\n" + note : ""}\n\nНужно проверить расписание на замены.`;
+    for (const h of heads.rows) {
+      await db.query(
+        "INSERT INTO notifications (to_user_id, title, body) VALUES ($1,$2,$3)",
+        [h.id, title, body]
+      );
+    }
+    res.json({ request: req_ });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server_error", details: String(e.message) });
+  }
+});
+
+// PATCH /api/absence-requests/:id — head confirms or declines
+app.patch("/api/absence-requests/:id", authMiddleware, requireHead, async (req, res) => {
+  const { status } = req.body || {};
+  if (!["confirmed", "declined"].includes(status)) return res.status(400).json({ error: "bad_status" });
+  const upd = await db.query(
+    `UPDATE absence_requests SET status=$1, reviewed_by=$2, reviewed_at=NOW()
+     WHERE id=$3 RETURNING *, (SELECT name FROM users WHERE id=teacher_id) as teacher_name`,
+    [status, req.userId, req.params.id]
+  );
+  if (!upd.rows[0]) return res.status(404).json({ error: "not_found" });
+  const req_ = upd.rows[0];
+
+  // Notify the teacher about decision
+  const statusLabel = status === "confirmed" ? "✅ подтверждено" : "❌ отклонено";
+  await db.query(
+    "INSERT INTO notifications (to_user_id, title, body) VALUES ($1,$2,$3)",
+    [req_.teacher_id, `Заявка на отсутствие ${statusLabel}`, `Ваша заявка на ${req_.start_date}–${req_.end_date} ${statusLabel.toLowerCase()}.`]
+  );
+  res.json({ request: req_ });
+});
+
+// GET /api/absence-requests/suggest-replacements?teacher_id=&date= — suggest free teachers
+app.get("/api/absence-requests/suggest-replacements", authMiddleware, async (req, res) => {
+  const { teacher_id, date } = req.query;
+  if (!teacher_id || !date) return res.status(400).json({ error: "bad_request" });
+
+  // Get absent teacher info
+  const absentUser = await db.query("SELECT * FROM users WHERE id=$1", [teacher_id]);
+  if (!absentUser.rows[0]) return res.status(404).json({ error: "not_found" });
+  const absent = absentUser.rows[0];
+  const dept = absent.dept || (absent.depts && absent.depts[0]);
+
+  // Get all teachers in same dept (excluding absent teacher)
+  const teachers = await db.query(
+    `SELECT id, name, subjects, dept, depts FROM users
+     WHERE role='teacher' AND (dept=$1 OR $1=ANY(depts)) AND id != $2`,
+    [dept, teacher_id]
+  );
+
+  // Check which teachers are absent on that date
+  const absent_ids_r = await db.query(
+    `SELECT user_id FROM user_absences
+     WHERE start_date <= $1 AND end_date >= $1`,
+    [date]
+  );
+  const absentIds = new Set(absent_ids_r.rows.map(r => r.user_id));
+
+  // Filter out absent teachers; prefer those who share subjects with absent teacher
+  const absentSubjects = new Set(absent.subjects || []);
+  const available = teachers.rows
+    .filter(t => !absentIds.has(t.id))
+    .map(t => {
+      const tSubjects = new Set(t.subjects || []);
+      const overlap = [...absentSubjects].filter(s => tSubjects.has(s));
+      return { ...t, subject_overlap: overlap, overlap_count: overlap.length };
+    })
+    .sort((a, b) => b.overlap_count - a.overlap_count);
+
+  res.json({ available, dept, absent: absent });
+});
+
+// ============================================================
+// INTERNAL CHAT
+// ============================================================
+
+// Helper: ensure dept room exists for a dept
+async function ensureDeptRoom(dept) {
+  const ex = await db.query("SELECT id FROM chat_rooms WHERE kind='dept' AND dept=$1", [dept]);
+  if (ex.rows[0]) return ex.rows[0].id;
+  const r = await db.query(
+    "INSERT INTO chat_rooms (kind, dept, name) VALUES ('dept',$1,$2) RETURNING id",
+    [dept, dept]
+  );
+  return r.rows[0].id;
+}
+
+// GET /api/chat/rooms — list rooms user is in (all dept rooms for their dept + private rooms)
+app.get("/api/chat/rooms", authMiddleware, async (req, res) => {
+  const u = await getUserById(req.userId);
+  const depts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
+
+  // Ensure dept rooms exist
+  for (const d of depts) await ensureDeptRoom(d);
+
+  // Get dept rooms
+  const deptRooms = depts.length > 0 ? await db.query(
+    `SELECT r.id, r.kind, r.dept, r.name,
+            (SELECT COUNT(*) FROM chat_messages m WHERE m.room_id=r.id AND NOT m.is_deleted
+               AND m.sent_at > COALESCE((SELECT last_read_at FROM chat_room_reads rd WHERE rd.room_id=r.id AND rd.user_id=$1), '1970-01-01')) as unread_count,
+            (SELECT m.body FROM chat_messages m WHERE m.room_id=r.id AND NOT m.is_deleted ORDER BY m.sent_at DESC LIMIT 1) as last_message,
+            (SELECT m.sent_at FROM chat_messages m WHERE m.room_id=r.id AND NOT m.is_deleted ORDER BY m.sent_at DESC LIMIT 1) as last_message_at
+     FROM chat_rooms r WHERE r.kind='dept' AND r.dept=ANY($2) ORDER BY r.dept`,
+    [req.userId, depts]
+  ) : { rows: [] };
+
+  // Get private rooms where this user is a member
+  const privateRooms = await db.query(
+    `SELECT r.id, r.kind, r.dept, r.name,
+            (SELECT COUNT(*) FROM chat_messages m WHERE m.room_id=r.id AND NOT m.is_deleted
+               AND m.sent_at > COALESCE((SELECT last_read_at FROM chat_room_reads rd WHERE rd.room_id=r.id AND rd.user_id=$1), '1970-01-01')) as unread_count,
+            (SELECT m.body FROM chat_messages m WHERE m.room_id=r.id AND NOT m.is_deleted ORDER BY m.sent_at DESC LIMIT 1) as last_message,
+            (SELECT m.sent_at FROM chat_messages m WHERE m.room_id=r.id AND NOT m.is_deleted ORDER BY m.sent_at DESC LIMIT 1) as last_message_at,
+            (SELECT array_agg(u2.name) FROM chat_room_members cm2 JOIN users u2 ON u2.id=cm2.user_id WHERE cm2.room_id=r.id AND cm2.user_id != $1) as other_names
+     FROM chat_rooms r
+     JOIN chat_room_members cm ON cm.room_id=r.id AND cm.user_id=$1
+     WHERE r.kind='private'
+     ORDER BY last_message_at DESC NULLS LAST`,
+    [req.userId]
+  );
+
+  res.json({ rooms: [...deptRooms.rows, ...privateRooms.rows] });
+});
+
+// POST /api/chat/rooms/private — create or find private room with another user
+app.post("/api/chat/rooms/private", authMiddleware, async (req, res) => {
+  const { other_user_id } = req.body || {};
+  if (!other_user_id) return res.status(400).json({ error: "other_user_id required" });
+  const otherId = parseInt(other_user_id);
+  if (otherId === req.userId) return res.status(400).json({ error: "cannot_self" });
+
+  // Check if room already exists
+  const ex = await db.query(
+    `SELECT r.id FROM chat_rooms r
+     JOIN chat_room_members m1 ON m1.room_id=r.id AND m1.user_id=$1
+     JOIN chat_room_members m2 ON m2.room_id=r.id AND m2.user_id=$2
+     WHERE r.kind='private' LIMIT 1`,
+    [req.userId, otherId]
+  );
+  if (ex.rows[0]) return res.json({ room_id: ex.rows[0].id });
+
+  // Create new private room
+  const r = await db.query("INSERT INTO chat_rooms (kind) VALUES ('private') RETURNING id");
+  const room_id = r.rows[0].id;
+  await db.query("INSERT INTO chat_room_members (room_id, user_id) VALUES ($1,$2),($1,$3)", [room_id, req.userId, otherId]);
+  res.json({ room_id });
+});
+
+// GET /api/chat/rooms/:id/messages — fetch messages (with pagination)
+app.get("/api/chat/rooms/:id/messages", authMiddleware, async (req, res) => {
+  const room_id = parseInt(req.params.id);
+  const u = await getUserById(req.userId);
+  const depts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
+
+  // Check access: dept room in user's dept, or private room where user is member
+  const room = await db.query("SELECT * FROM chat_rooms WHERE id=$1", [room_id]);
+  if (!room.rows[0]) return res.status(404).json({ error: "not_found" });
+  const rm = room.rows[0];
+  if (rm.kind === "dept" && !depts.includes(rm.dept)) return res.status(403).json({ error: "forbidden" });
+  if (rm.kind === "private") {
+    const mem = await db.query("SELECT 1 FROM chat_room_members WHERE room_id=$1 AND user_id=$2", [room_id, req.userId]);
+    if (!mem.rows[0]) return res.status(403).json({ error: "forbidden" });
+  }
+
+  const before = req.query.before; // ISO date for pagination
+  const limit = Math.min(parseInt(req.query.limit || "50"), 100);
+  let rows;
+  if (before) {
+    rows = await db.query(
+      `SELECT m.*, u.name as sender_name FROM chat_messages m
+       JOIN users u ON u.id=m.sender_id
+       WHERE m.room_id=$1 AND NOT m.is_deleted AND m.sent_at < $2
+       ORDER BY m.sent_at DESC LIMIT $3`,
+      [room_id, before, limit]
+    );
+  } else {
+    rows = await db.query(
+      `SELECT m.*, u.name as sender_name FROM chat_messages m
+       JOIN users u ON u.id=m.sender_id
+       WHERE m.room_id=$1 AND NOT m.is_deleted
+       ORDER BY m.sent_at DESC LIMIT $2`,
+      [room_id, limit]
+    );
+  }
+
+  // Mark as read
+  await db.query(
+    `INSERT INTO chat_room_reads (room_id, user_id, last_read_at) VALUES ($1,$2,NOW())
+     ON CONFLICT (room_id, user_id) DO UPDATE SET last_read_at=NOW()`,
+    [room_id, req.userId]
+  );
+
+  res.json({ messages: rows.rows.reverse() });
+});
+
+// POST /api/chat/rooms/:id/messages — send a message
+app.post("/api/chat/rooms/:id/messages", authMiddleware, async (req, res) => {
+  const room_id = parseInt(req.params.id);
+  const { body } = req.body || {};
+  if (!body || !body.trim()) return res.status(400).json({ error: "empty_message" });
+  const u = await getUserById(req.userId);
+  const depts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
+
+  // Check access
+  const room = await db.query("SELECT * FROM chat_rooms WHERE id=$1", [room_id]);
+  if (!room.rows[0]) return res.status(404).json({ error: "not_found" });
+  const rm = room.rows[0];
+  if (rm.kind === "dept" && !depts.includes(rm.dept)) return res.status(403).json({ error: "forbidden" });
+  if (rm.kind === "private") {
+    const mem = await db.query("SELECT 1 FROM chat_room_members WHERE room_id=$1 AND user_id=$2", [room_id, req.userId]);
+    if (!mem.rows[0]) return res.status(403).json({ error: "forbidden" });
+  }
+
+  const r = await db.query(
+    "INSERT INTO chat_messages (room_id, sender_id, body) VALUES ($1,$2,$3) RETURNING *, $4::text as sender_name",
+    [room_id, req.userId, body.trim(), u.name]
+  );
+  // Update read status for sender
+  await db.query(
+    `INSERT INTO chat_room_reads (room_id, user_id, last_read_at) VALUES ($1,$2,NOW())
+     ON CONFLICT (room_id, user_id) DO UPDATE SET last_read_at=NOW()`,
+    [room_id, req.userId]
+  );
+  res.json({ message: r.rows[0] });
+});
+
+// GET /api/chat/unread — total unread message count for current user
+app.get("/api/chat/unread", authMiddleware, async (req, res) => {
+  const u = await getUserById(req.userId);
+  const depts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
+
+  let total = 0;
+  // Dept rooms
+  if (depts.length > 0) {
+    const r = await db.query(
+      `SELECT COUNT(*) FROM chat_messages m
+       JOIN chat_rooms r ON r.id=m.room_id
+       WHERE r.kind='dept' AND r.dept=ANY($1) AND NOT m.is_deleted AND m.sender_id != $2
+       AND m.sent_at > COALESCE((SELECT last_read_at FROM chat_room_reads rd WHERE rd.room_id=m.room_id AND rd.user_id=$2), '1970-01-01')`,
+      [depts, req.userId]
+    );
+    total += parseInt(r.rows[0].count);
+  }
+  // Private rooms
+  const r2 = await db.query(
+    `SELECT COUNT(*) FROM chat_messages m
+     JOIN chat_room_members cm ON cm.room_id=m.room_id AND cm.user_id=$1
+     WHERE NOT m.is_deleted AND m.sender_id != $1
+     AND m.sent_at > COALESCE((SELECT last_read_at FROM chat_room_reads rd WHERE rd.room_id=m.room_id AND rd.user_id=$1), '1970-01-01')`,
+    [req.userId]
+  );
+  total += parseInt(r2.rows[0].count);
+  res.json({ unread: total });
 });
 
 // === Health ===

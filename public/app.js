@@ -90,6 +90,17 @@ const API = {
   },
   getScheduleOverrides() { return this.fetch("/api/schedule/overrides"); },
   deleteScheduleOverride(dept) { return this.fetch(`/api/schedule/overrides/${encodeURIComponent(dept)}`, { method: "DELETE" }); },
+  // Absence requests (teacher self-report)
+  absenceRequests() { return this.fetch("/api/absence-requests"); },
+  createAbsenceRequest(d) { return this.fetch("/api/absence-requests", { method: "POST", body: JSON.stringify(d) }); },
+  reviewAbsenceRequest(id, status) { return this.fetch(`/api/absence-requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); },
+  suggestReplacements(teacher_id, date) { return this.fetch(`/api/absence-requests/suggest-replacements?teacher_id=${teacher_id}&date=${date}`); },
+  // Chat
+  chatRooms() { return this.fetch("/api/chat/rooms"); },
+  chatCreatePrivate(other_user_id) { return this.fetch("/api/chat/rooms/private", { method: "POST", body: JSON.stringify({ other_user_id }) }); },
+  chatMessages(room_id, before) { return this.fetch(`/api/chat/rooms/${room_id}/messages${before ? "?before=" + encodeURIComponent(before) : ""}`); },
+  chatSend(room_id, body) { return this.fetch(`/api/chat/rooms/${room_id}/messages`, { method: "POST", body: JSON.stringify({ body }) }); },
+  chatUnread() { return this.fetch("/api/chat/unread"); },
 };
 
 // ============= GLOBAL STATE =============
@@ -115,6 +126,12 @@ let state = {
 };
 let ABSENCES = [];
 let ACSUP = [];
+let ABSENCE_REQUESTS = [];
+let CHAT_ROOMS = [];
+let CHAT_ACTIVE_ROOM = null;
+let CHAT_MESSAGES = [];
+let CHAT_POLL_INTERVAL = null;
+let CHAT_UNREAD = 0;
 
 let pendingLoginEmail = null;
 let EDIT_MODE = false;
@@ -987,6 +1004,8 @@ function setSection(s) {
     absences: "sectionAbsences",
     schedhist: "sectionSchedhist",
     generator: "sectionGenerator",
+    chat: "sectionChat",
+    absreq: "sectionAbsReq",
   };
   for (const k in map) {
     const el = document.getElementById(map[k]);
@@ -1002,6 +1021,8 @@ function setSection(s) {
   if (s === "absences") renderAbsences();
   if (s === "schedhist") renderSchedHistory();
   if (s === "generator") renderGenerator();
+  if (s === "chat") renderChat();
+  if (s === "absreq") renderAbsReq();
 }
 function populateClassFilter() {
   const sel = document.getElementById("classFilter");
@@ -1071,9 +1092,17 @@ function initUI() {
   const myTab = document.getElementById("myTab");
   const hasLessons = CURRENT_USER && ALL_TEACHERS[CURRENT_USER.name] && ALL_TEACHERS[CURRENT_USER.name].total > 0;
   myTab.style.display = hasLessons ? "" : "none";
+  // Chat tab — always visible
+  const chatTab = document.getElementById("chatTab");
+  if (chatTab) chatTab.style.display = "";
+  // Absence requests — teachers see it as "Мой больничный", heads see all
+  const absReqTab = document.getElementById("absReqTab");
+  if (absReqTab) absReqTab.style.display = "";
   setSection("today"); // default
   renderUserChip();
   renderBell();
+  // Start polling unread chat count
+  startChatUnreadPoll();
 }
 
 // Login enter-key shortcuts
@@ -3850,6 +3879,386 @@ const _origSetSection = typeof setSection !== "undefined" ? setSection : null;
 // ============= GENERATOR SECTION INIT =============
 // Patch setSection to handle 'generator'
 const __origInitUI = typeof initUI !== "undefined" ? initUI : null;
+
+// ============================================================
+// ABSENCE REQUESTS (teacher self-report sick / personal day)
+// ============================================================
+
+async function renderAbsReq() {
+  const el = document.getElementById("sectionAbsReq");
+  if (!el) return;
+  el.innerHTML = `<div style="padding:16px"><div class="spinner"></div> Загрузка...</div>`;
+  try {
+    const r = await API.absenceRequests();
+    ABSENCE_REQUESTS = r.requests || [];
+  } catch (e) {
+    el.innerHTML = `<div style="padding:16px;color:var(--err)">Ошибка: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  const isHead = CURRENT_USER && CURRENT_USER.role === "head";
+  const kindLabel = { sick: "🤒 Больничный", personal: "📋 Личные обстоятельства", other: "📝 Другое" };
+  const statusLabel = { pending: "⏳ На рассмотрении", confirmed: "✅ Подтверждено", declined: "❌ Отклонено" };
+
+  let html = `<div class="section-header"><h2>${isHead ? "📋 Заявки на отсутствие" : "🤒 Мои заявки на отсутствие"}</h2></div>`;
+
+  // Form for teacher to submit absence
+  if (!isHead) {
+    html += `
+    <div class="card" style="margin:16px;padding:16px;max-width:480px">
+      <h3 style="margin:0 0 12px">Сообщить об отсутствии</h3>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label>Дата начала <input type="date" id="absReqStart" class="input" required></label>
+        <label>Дата окончания <input type="date" id="absReqEnd" class="input" required></label>
+        <label>Причина
+          <select id="absReqKind" class="input">
+            <option value="sick">🤒 Больничный</option>
+            <option value="personal">📋 Личные обстоятельства</option>
+            <option value="other">📝 Другое</option>
+          </select>
+        </label>
+        <label>Комментарий <input type="text" id="absReqNote" class="input" placeholder="Необязательно..."></label>
+        <button class="btn btn-primary" onclick="submitAbsenceRequest()">Отправить заявку</button>
+        <div id="absReqMsg" style="display:none;font-size:13px"></div>
+      </div>
+    </div>`;
+  }
+
+  // List of requests
+  if (!ABSENCE_REQUESTS.length) {
+    html += `<div style="padding:16px;color:var(--sub)">Заявок пока нет.</div>`;
+  } else {
+    html += `<div style="padding:16px;display:flex;flex-direction:column;gap:12px;max-width:640px">`;
+    for (const req of ABSENCE_REQUESTS) {
+      const isPending = req.status === "pending";
+      const dateRange = req.start_date === req.end_date ? req.start_date : `${req.start_date} — ${req.end_date}`;
+      html += `
+      <div class="card" style="padding:14px;border-left:3px solid ${isPending ? "var(--accent)" : req.status === "confirmed" ? "#22c55e" : "var(--err)"}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div>
+            ${isHead ? `<strong>${escapeHtml(req.teacher_name)}</strong> · ` : ""}
+            ${kindLabel[req.kind] || req.kind} · ${escapeHtml(dateRange)}
+          </div>
+          <div style="font-size:12px;color:var(--sub)">${statusLabel[req.status] || req.status}</div>
+        </div>
+        ${req.note ? `<div style="font-size:13px;color:var(--sub);margin-top:4px">${escapeHtml(req.note)}</div>` : ""}
+        ${req.reviewer_name ? `<div style="font-size:12px;color:var(--sub);margin-top:4px">Рассмотрел: ${escapeHtml(req.reviewer_name)}</div>` : ""}
+        ${isHead && isPending ? `
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-small" style="background:#22c55e;color:#fff" onclick="reviewAbsRequest(${req.id},'confirmed')">✅ Подтвердить</button>
+            <button class="btn btn-small" style="background:var(--err);color:#fff" onclick="reviewAbsRequest(${req.id},'declined')">❌ Отклонить</button>
+            <button class="btn btn-small" onclick="showReplacementSuggestions(${req.teacher_id},'${req.start_date}')">🔄 Предложить замену</button>
+          </div>` : ""}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  el.innerHTML = html;
+  // Set default dates (today + today)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const startEl = document.getElementById("absReqStart");
+  const endEl = document.getElementById("absReqEnd");
+  if (startEl) startEl.value = todayStr;
+  if (endEl) endEl.value = todayStr;
+}
+
+async function submitAbsenceRequest() {
+  const start_date = document.getElementById("absReqStart")?.value;
+  const end_date = document.getElementById("absReqEnd")?.value;
+  const kind = document.getElementById("absReqKind")?.value;
+  const note = document.getElementById("absReqNote")?.value;
+  const msg = document.getElementById("absReqMsg");
+  if (!start_date || !end_date) { if (msg) { msg.style.display = ""; msg.style.color = "var(--err)"; msg.textContent = "Укажите даты."; } return; }
+  if (msg) { msg.style.display = ""; msg.style.color = "var(--accent)"; msg.textContent = "Отправляю..."; }
+  try {
+    await API.createAbsenceRequest({ start_date, end_date, kind, note });
+    if (msg) { msg.style.color = "#22c55e"; msg.textContent = "✅ Заявка отправлена! Завуч получит уведомление."; }
+    setTimeout(() => renderAbsReq(), 1500);
+  } catch (e) {
+    if (msg) { msg.style.color = "var(--err)"; msg.textContent = "Ошибка: " + e.message; }
+  }
+}
+
+async function reviewAbsRequest(id, status) {
+  try {
+    await API.reviewAbsenceRequest(id, status);
+    renderAbsReq();
+  } catch (e) {
+    alert("Ошибка: " + e.message);
+  }
+}
+
+async function showReplacementSuggestions(teacher_id, date) {
+  const modal = document.getElementById("replaceSuggestModal");
+  if (!modal) {
+    // Build modal if not exists
+    const m = document.createElement("div");
+    m.id = "replaceSuggestModal";
+    m.className = "modal-overlay";
+    m.innerHTML = `
+      <div class="modal" style="max-width:480px">
+        <button class="modal-close" onclick="document.getElementById('replaceSuggestModal').style.display='none'">✕</button>
+        <h3 style="margin:0 0 14px">🔄 Доступные замены</h3>
+        <div id="replaceSuggestList"><div class="spinner"></div></div>
+      </div>`;
+    document.body.appendChild(m);
+  }
+  const m2 = document.getElementById("replaceSuggestModal");
+  m2.style.display = "flex";
+  const listEl = document.getElementById("replaceSuggestList");
+  listEl.innerHTML = `<div class="spinner"></div> Ищу доступных учителей...`;
+  try {
+    const r = await API.suggestReplacements(teacher_id, date);
+    const avail = r.available || [];
+    if (!avail.length) {
+      listEl.innerHTML = `<div style="color:var(--sub)">Нет доступных учителей на эту дату.</div>`;
+      return;
+    }
+    let html = `<div style="font-size:13px;color:var(--sub);margin-bottom:10px">Учителя, которые НЕ отсутствуют ${date}:</div>`;
+    for (const t of avail) {
+      const overlap = t.subject_overlap && t.subject_overlap.length > 0
+        ? `<span style="background:#dcfce7;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;margin-left:6px">совпадает: ${t.subject_overlap.slice(0,3).join(", ")}</span>`
+        : "";
+      html += `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div class="avatar ${avatarColor(t.name)} av-sm">${getInitials(t.name)}</div>
+          <div style="flex:1"><strong>${escapeHtml(t.name)}</strong>${overlap}<div style="font-size:12px;color:var(--sub)">${escapeHtml(t.dept || "")}</div></div>
+        </div>`;
+    }
+    listEl.innerHTML = html;
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:var(--err)">Ошибка: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+// ============================================================
+// INTERNAL CHAT
+// ============================================================
+
+async function renderChat() {
+  const el = document.getElementById("sectionChat");
+  if (!el) return;
+  el.innerHTML = `<div style="display:flex;height:calc(100vh - 64px);overflow:hidden">
+    <div id="chatSidebar" style="width:260px;min-width:200px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0"></div>
+    <div id="chatMain" style="flex:1;display:flex;flex-direction:column;min-width:0"></div>
+  </div>`;
+  await loadChatRooms();
+  if (CHAT_ROOMS.length > 0 && !CHAT_ACTIVE_ROOM) {
+    await openChatRoom(CHAT_ROOMS[0].id);
+  } else if (CHAT_ACTIVE_ROOM) {
+    await openChatRoom(CHAT_ACTIVE_ROOM);
+  } else {
+    document.getElementById("chatMain").innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--sub)">Выберите чат слева</div>`;
+  }
+}
+
+async function loadChatRooms() {
+  try {
+    const r = await API.chatRooms();
+    CHAT_ROOMS = r.rooms || [];
+  } catch (e) {
+    CHAT_ROOMS = [];
+  }
+  renderChatSidebar();
+}
+
+function renderChatSidebar() {
+  const el = document.getElementById("chatSidebar");
+  if (!el) return;
+  const canDM = ACCOUNTS.length > 1;
+  let html = `<div style="padding:12px 14px;font-weight:600;font-size:14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    💬 Чат
+    ${canDM ? `<button class="btn btn-small" onclick="openNewDmModal()" title="Новый личный чат">✉ Написать</button>` : ""}
+  </div>`;
+  for (const room of CHAT_ROOMS) {
+    const isActive = room.id === CHAT_ACTIVE_ROOM;
+    const name = room.kind === "dept" ? `📚 ${room.dept || room.name}` : `👤 ${(room.other_names || []).join(", ") || "Личный чат"}`;
+    const unread = parseInt(room.unread_count) || 0;
+    const preview = room.last_message ? escapeHtml(String(room.last_message).slice(0, 40)) : "Нет сообщений";
+    html += `
+    <div onclick="openChatRoom(${room.id})" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);background:${isActive ? "var(--hover)" : "transparent"};transition:background 0.15s">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong style="font-size:13px">${name}</strong>
+        ${unread > 0 ? `<span style="background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px">${unread}</span>` : ""}
+      </div>
+      <div style="font-size:12px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</div>
+    </div>`;
+  }
+  if (!CHAT_ROOMS.length) {
+    html += `<div style="padding:14px;font-size:13px;color:var(--sub)">Нет доступных чатов</div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function openChatRoom(room_id) {
+  CHAT_ACTIVE_ROOM = room_id;
+  renderChatSidebar();
+  const mainEl = document.getElementById("chatMain");
+  if (!mainEl) return;
+  mainEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%"><div class="spinner"></div></div>`;
+  try {
+    const r = await API.chatMessages(room_id);
+    CHAT_MESSAGES = r.messages || [];
+    renderChatMain(room_id);
+  } catch (e) {
+    mainEl.innerHTML = `<div style="padding:16px;color:var(--err)">Ошибка: ${escapeHtml(e.message)}</div>`;
+  }
+  // Reset unread for this room in sidebar
+  const room = CHAT_ROOMS.find(r => r.id === room_id);
+  if (room) room.unread_count = 0;
+  renderChatSidebar();
+}
+
+function renderChatMain(room_id) {
+  const mainEl = document.getElementById("chatMain");
+  if (!mainEl) return;
+  const room = CHAT_ROOMS.find(r => r.id === room_id);
+  const roomName = room ? (room.kind === "dept" ? `📚 ${room.dept || room.name}` : `👤 ${(room.other_names || []).join(", ")}`) : "Чат";
+  mainEl.innerHTML = `
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:15px">${roomName}</div>
+    <div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px"></div>
+    <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input id="chatInput" class="input" placeholder="Написать сообщение..." style="flex:1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}">
+      <button class="btn btn-primary" onclick="sendChatMessage()">Отправить</button>
+    </div>`;
+  renderChatMessages();
+  // Scroll to bottom
+  setTimeout(() => {
+    const msgs = document.getElementById("chatMessages");
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }, 50);
+}
+
+function renderChatMessages() {
+  const el = document.getElementById("chatMessages");
+  if (!el) return;
+  if (!CHAT_MESSAGES.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--sub);font-size:13px;padding:20px">Сообщений пока нет. Напишите первым!</div>`;
+    return;
+  }
+  let html = "";
+  let lastDate = null;
+  for (const msg of CHAT_MESSAGES) {
+    const isMine = msg.sender_id === CURRENT_USER?.id;
+    const d = new Date(msg.sent_at);
+    const dateStr = d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+    if (dateStr !== lastDate) {
+      html += `<div style="text-align:center;font-size:11px;color:var(--sub);padding:4px 0">${dateStr}</div>`;
+      lastDate = dateStr;
+    }
+    const timeStr = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    html += `
+    <div style="display:flex;flex-direction:column;align-items:${isMine ? "flex-end" : "flex-start"}">
+      ${!isMine ? `<div style="font-size:11px;color:var(--sub);margin-bottom:2px;padding-left:4px">${escapeHtml(msg.sender_name)}</div>` : ""}
+      <div style="max-width:70%;background:${isMine ? "var(--accent)" : "var(--card)"};color:${isMine ? "#fff" : "var(--fg)"};border-radius:12px;padding:8px 12px;font-size:14px;word-break:break-word;border:1px solid var(--border)">
+        ${escapeHtml(msg.body)}
+        <div style="font-size:10px;color:${isMine ? "rgba(255,255,255,0.7)" : "var(--sub)"};text-align:right;margin-top:2px">${timeStr}</div>
+      </div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("chatInput");
+  if (!input || !CHAT_ACTIVE_ROOM) return;
+  const body = input.value.trim();
+  if (!body) return;
+  input.value = "";
+  input.disabled = true;
+  try {
+    const r = await API.chatSend(CHAT_ACTIVE_ROOM, body);
+    CHAT_MESSAGES.push(r.message);
+    renderChatMessages();
+    // Scroll to bottom
+    const msgs = document.getElementById("chatMessages");
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  } catch (e) {
+    input.value = body; // restore on error
+    alert("Ошибка отправки: " + e.message);
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+// Poll for new messages every 15 seconds when chat is visible
+async function pollChatMessages() {
+  if (state.section !== "chat" || !CHAT_ACTIVE_ROOM) return;
+  try {
+    const r = await API.chatMessages(CHAT_ACTIVE_ROOM);
+    const newMsgs = r.messages || [];
+    if (newMsgs.length !== CHAT_MESSAGES.length || (newMsgs.length && newMsgs[newMsgs.length-1].id !== CHAT_MESSAGES[CHAT_MESSAGES.length-1]?.id)) {
+      CHAT_MESSAGES = newMsgs;
+      renderChatMessages();
+      const msgs = document.getElementById("chatMessages");
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+  } catch (e) { /* ignore poll errors */ }
+}
+
+function startChatUnreadPoll() {
+  if (CHAT_POLL_INTERVAL) clearInterval(CHAT_POLL_INTERVAL);
+  CHAT_POLL_INTERVAL = setInterval(async () => {
+    if (state.section === "chat") {
+      await pollChatMessages();
+      await loadChatRooms();
+    }
+    // Always update unread badge
+    try {
+      const r = await API.chatUnread();
+      const prev = CHAT_UNREAD;
+      CHAT_UNREAD = r.unread || 0;
+      if (prev !== CHAT_UNREAD) updateChatBadge();
+    } catch (e) { /* ignore */ }
+  }, 15000);
+}
+
+function updateChatBadge() {
+  const badge = document.getElementById("chatUnreadBadge");
+  if (!badge) return;
+  if (CHAT_UNREAD > 0) {
+    badge.textContent = CHAT_UNREAD > 99 ? "99+" : CHAT_UNREAD;
+    badge.style.display = "";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+async function openNewDmModal() {
+  // Show modal to pick a user to DM
+  const others = ACCOUNTS.filter(a => a.id !== CURRENT_USER?.id);
+  let html = `<div class="modal-overlay" id="dmPickModal" style="display:flex">
+    <div class="modal" style="max-width:380px">
+      <button class="modal-close" onclick="document.getElementById('dmPickModal').remove()">✕</button>
+      <h3 style="margin:0 0 14px">💬 Написать сообщение</h3>
+      <div style="display:flex;flex-direction:column;gap:6px">`;
+  for (const u of others) {
+    html += `
+      <div onclick="startDmWith(${u.id})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+        <div class="avatar ${avatarColor(u.name)} av-sm">${getInitials(u.name)}</div>
+        <div><strong style="font-size:13px">${escapeHtml(u.name)}</strong><div style="font-size:11px;color:var(--sub)">${escapeHtml(u.title || u.role)}</div></div>
+      </div>`;
+  }
+  html += `</div></div></div>`;
+  const existing = document.getElementById("dmPickModal");
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML("beforeend", html);
+}
+
+async function startDmWith(userId) {
+  const modal = document.getElementById("dmPickModal");
+  if (modal) modal.remove();
+  try {
+    const r = await API.chatCreatePrivate(userId);
+    // Reload rooms then open this room
+    await loadChatRooms();
+    setSection("chat");
+    await openChatRoom(r.room_id);
+  } catch (e) {
+    alert("Ошибка: " + e.message);
+  }
+}
 
 // On load: if we have a token, try /me. Else show login.
 async function boot() {

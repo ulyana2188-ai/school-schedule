@@ -239,3 +239,67 @@ CREATE TABLE IF NOT EXISTS schedule_overrides (
   imported_by INT REFERENCES users(id),
   imported_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================================
+-- INTERNAL CHAT / MESSAGES
+-- ============================================================
+
+-- Chat rooms: can be dept-wide or private (between two users)
+CREATE TABLE IF NOT EXISTS chat_rooms (
+  id          SERIAL PRIMARY KEY,
+  kind        TEXT NOT NULL CHECK (kind IN ('dept','private')),
+  dept        TEXT,          -- for kind='dept'
+  name        TEXT,          -- display name (for dept rooms)
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chat_rooms_dept ON chat_rooms(dept);
+
+-- Members of private rooms
+CREATE TABLE IF NOT EXISTS chat_room_members (
+  room_id     INT REFERENCES chat_rooms(id) ON DELETE CASCADE NOT NULL,
+  user_id     INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  PRIMARY KEY (room_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_room_members(user_id);
+
+-- Messages
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id          SERIAL PRIMARY KEY,
+  room_id     INT REFERENCES chat_rooms(id) ON DELETE CASCADE NOT NULL,
+  sender_id   INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  body        TEXT NOT NULL,
+  sent_at     TIMESTAMPTZ DEFAULT NOW(),
+  is_deleted  BOOLEAN DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_room ON chat_messages(room_id, sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_msg_sender ON chat_messages(sender_id);
+
+-- Track last-read per user per room (for unread counts)
+CREATE TABLE IF NOT EXISTS chat_room_reads (
+  room_id     INT REFERENCES chat_rooms(id) ON DELETE CASCADE NOT NULL,
+  user_id     INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  last_read_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (room_id, user_id)
+);
+
+-- ============================================================
+-- ABSENCE REQUESTS (teacher self-report → head gets notification)
+-- ============================================================
+
+-- absence_requests: teacher submits → head confirms/declines → if confirmed, triggers replacement search
+CREATE TABLE IF NOT EXISTS absence_requests (
+  id            SERIAL PRIMARY KEY,
+  teacher_id    INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  dept          TEXT NOT NULL,
+  start_date    DATE NOT NULL,
+  end_date      DATE NOT NULL,
+  kind          TEXT NOT NULL CHECK (kind IN ('sick','personal','other')),
+  note          TEXT,
+  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','declined')),
+  reviewed_by   INT REFERENCES users(id),
+  reviewed_at   TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_absreq_teacher ON absence_requests(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_absreq_dept ON absence_requests(dept);
+CREATE INDEX IF NOT EXISTS idx_absreq_status ON absence_requests(status);
