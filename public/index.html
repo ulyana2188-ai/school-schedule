@@ -232,9 +232,11 @@
       <button class="btn secondary" onclick="printSchedule()" style="margin-left:6px;">🖨 Печать</button>
       <button class="btn secondary" onclick="exportSchedulePDF()" style="margin-left:6px;" title="Экспорт в PDF">📄 PDF</button>
       <button class="btn secondary" onclick="openQrModal()" style="margin-left:6px;" title="QR-код расписания">📱 QR</button>
+      <a class="btn secondary" href="/p.html" target="_blank" style="margin-left:6px;text-decoration:none;" title="Публичная страница расписания для учеников">🌐 Публично</a>
       <button id="undoBtn" class="btn secondary" onclick="undoLastEdit()" style="display:none;margin-left:6px;" title="Отменить последнее действие (Ctrl+Z)">↩ Отмена</button>
       <button id="copyModeBtn" class="btn secondary" onclick="toggleCopyMode()" style="display:none;margin-left:6px;" title="Режим копирования ячеек">⧉ Копировать</button>
       <button id="editModeBtn" class="btn secondary" onclick="toggleEditMode()" style="display:none;margin-left:6px;">✎ Редактировать</button>
+      <span id="liveBadge" title="Обновления в реальном времени" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-left:8px;flex-shrink:0;align-self:center;" aria-hidden="true"></span>
       <button id="importFullBtn" class="btn" onclick="openImportFullModal()" style="display:none;margin-left:6px;" title="Загрузить готовое расписание из Excel">⤴ Загрузить расписание</button>
     </div>
     <div id="importStatusBanner" style="display:none;padding:6px 14px;background:#EEF6FF;border-top:1px solid #BFDBFE;font-size:12px;color:#1D4ED8;align-items:center;gap:10px;"></div>

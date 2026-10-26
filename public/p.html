@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Расписание — Интеллект-плюс</title>
+  <link rel="icon" href="/icon-192.png">
+  <style>
+    :root {
+      --blue:   #4f46e5;
+      --blue-d: #4338ca;
+      --text:   #1e1b4b;
+      --muted:  #6b7280;
+      --border: #e5e7eb;
+      --bg:     #f8fafc;
+      --card:   #ffffff;
+      --radius: 10px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --text:   #e2e8f0;
+        --muted:  #94a3b8;
+        --border: #334155;
+        --bg:     #0f172a;
+        --card:   #1e293b;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    .top-bar {
+      background: var(--blue);
+      color: #fff;
+      padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .top-bar .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: -.3px; }
+    .top-bar .subtitle { font-size: .78rem; opacity: .82; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex; gap: 8px; padding: 12px 16px;
+      flex-wrap: wrap; align-items: center;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      position: sticky; top: 49px; z-index: 9;
+    }
+    select, button {
+      font-size: 13px; padding: 6px 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg); color: var(--text); cursor: pointer;
+    }
+    button.primary {
+      background: var(--blue); color: #fff; border-color: var(--blue); font-weight: 600;
+    }
+    button.primary:hover { background: var(--blue-d); }
+
+    /* ── Day tabs ── */
+    .day-tabs {
+      display: flex; gap: 4px; padding: 10px 16px 0;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .day-tabs::-webkit-scrollbar { display: none; }
+    .day-tab {
+      flex-shrink: 0; padding: 6px 14px; border-radius: 6px 6px 0 0;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border); border-bottom: none;
+      background: var(--bg); color: var(--muted);
+      transition: background .15s, color .15s;
+    }
+    .day-tab.active { background: var(--card); color: var(--blue); font-weight: 700; }
+
+    /* ── Schedule table ── */
+    .schedule-wrap {
+      padding: 0 16px 32px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      padding: 8px 10px; background: var(--bg);
+      font-weight: 600; color: var(--muted); font-size: 11px;
+      text-align: left; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 8px 10px; vertical-align: top; }
+    td.num { color: var(--muted); font-size: 11px; white-space: nowrap; width: 52px; }
+    td.subj { font-weight: 600; }
+    td.teacher, td.room { color: var(--muted); font-size: 12px; }
+    .edited-badge {
+      display: inline-block; font-size: 10px; background: #dbeafe;
+      color: #1d4ed8; border-radius: 4px; padding: 1px 5px; margin-left: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .edited-badge { background: #1e3a5f; color: #93c5fd; }
+    }
+    .empty-day { padding: 32px 0; text-align: center; color: var(--muted); font-size: 14px; }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #22c55e; display: inline-block; margin-left: 6px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+    /* ── Error / loading ── */
+    #state { padding: 40px 16px; text-align: center; color: var(--muted); }
+
+    /* ── Share ── */
+    .share-bar {
+      display: flex; gap: 6px; padding: 8px 16px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--muted); align-items: center;
+    }
+    .share-bar a { color: var(--blue); text-decoration: none; }
+    .share-btn {
+      margin-left: auto; padding: 4px 10px; font-size: 12px;
+      border-radius: 5px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); cursor: pointer;
+    }
+    .share-btn:hover { border-color: var(--blue); color: var(--blue); }
+  </style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div>
+    <div class="logo">Интеллект-плюс</div>
+    <div class="subtitle">Расписание занятий</div>
+  </div>
+  <span id="liveDot" class="live-dot" title="Обновления в реальном времени" style="margin-left:auto;display:none;"></span>
+</div>
+
+<div class="controls">
+  <select id="deptSel" onchange="onDeptChange()"><option value="">— Отделение —</option></select>
+  <select id="clsSel" onchange="onClsChange()"><option value="">— Класс —</option></select>
+  <button class="primary" onclick="share()">📤 Поделиться</button>
+</div>
+
+<div class="share-bar" id="shareBar" style="display:none;">
+  <span>Ссылка: <a id="shareLink" href="#"></a></span>
+  <button class="share-btn" onclick="copyLink()">📋 Копировать</button>
+</div>
+
+<div id="state">Выберите отделение и класс</div>
+
+<div id="dayTabs" class="day-tabs" style="display:none;"></div>
+<div id="schedWrap" class="schedule-wrap" style="display:none;"></div>
+
+<script>
+const DAYS = ["Понедельник","Вторник","Среда","Четверг","Пятница"];
+let _data = null;  // { dept, classes, schedule }
+let _dept = "";
+let _cls  = "";
+let _day  = DAYS[0];
+let _es   = null;  // EventSource
+
+// ── URL params ──────────────────────────────────────────────
+(function parseParams() {
+  const p = new URLSearchParams(location.search);
+  _dept = p.get("dept") || "";
+  _cls  = p.get("cls")  || "";
+  _day  = p.get("day")  || DAYS[0];
+})();
+
+// ── Load dept list from static schedule ─────────────────────
+async function loadDepts() {
+  try {
+    const r = await fetch("/api/public/schedule?dept=__list__").catch(() => null);
+    // We rely on SCHEDULE keys — fetch a known dept to get the list, or
+    // load via the main schedule endpoint (public, no auth needed for dept names)
+    // Actually we'll just try fetching each dept until we know what exists.
+    // Better: GET /api/public/depts — let's use a fallback of fetching with no dept to get 400
+    // which reveals nothing. Instead, build from the static schedule embedded server-side.
+    // For simplicity, load the schedule file via a dedicated depts endpoint.
+    const dr = await fetch("/api/public/depts");
+    if (!dr.ok) return;
+    const { depts } = await dr.json();
+    const sel = document.getElementById("deptSel");
+    sel.innerHTML = '<option value="">— Отделение —</option>' +
+      depts.map(d => `<option value="${esc(d)}" ${d===_dept?"selected":""}>${esc(d)}</option>`).join("");
+    if (_dept) onDeptChange(true);
+  } catch(e) {
+    setState("Ошибка загрузки отделений.");
+  }
+}
+
+async function onDeptChange(init) {
+  _dept = document.getElementById("deptSel").value;
+  if (!_dept) { _data = null; resetView(); return; }
+  setState("Загрузка...");
+  try {
+    const r = await fetch(`/api/public/schedule?dept=${encodeURIComponent(_dept)}`);
+    if (!r.ok) { setState("Ошибка загрузки расписания."); return; }
+    _data = await r.json();
+    // Fill class selector
+    const clsSel = document.getElementById("clsSel");
+    clsSel.innerHTML = '<option value="">— Класс —</option>' +
+      (_data.classes || []).map(c => `<option value="${esc(c)}" ${c===_cls?"selected":""}>${esc(c)} класс</option>`).join("");
+    if (_cls) onClsChange(init);
+    else setState("Выберите класс");
+    subscribeSSE();
+  } catch(e) {
+    setState("Ошибка: " + e.message);
+  }
+}
+
+function onClsChange(init) {
+  _cls = document.getElementById("clsSel").value;
+  if (!_cls) { resetView(); setState("Выберите класс"); return; }
+  if (!init) _day = DAYS[0]; // reset day on manual class change
+  updateURL();
+  renderDay();
+}
+
+function resetView() {
+  document.getElementById("dayTabs").style.display = "none";
+  document.getElementById("schedWrap").style.display = "none";
+  document.getElementById("shareBar").style.display = "none";
+}
+
+function setState(msg) {
+  document.getElementById("state").textContent = msg;
+  document.getElementById("state").style.display = "";
+}
+
+function renderDay() {
+  if (!_data || !_cls) return;
+
+  document.getElementById("state").style.display = "none";
+
+  // Day tabs
+  const tabs = document.getElementById("dayTabs");
+  tabs.style.display = "flex";
+  tabs.innerHTML = DAYS.map(d =>
+    `<div class="day-tab ${d===_day?"active":""}" onclick="setDay('${d}')">${d}</div>`
+  ).join("");
+
+  // Schedule table
+  const wrap = document.getElementById("schedWrap");
+  wrap.style.display = "";
+
+  const daySchedule = _data.schedule[_day] || {};
+  const rows = [];
+  // Collect lessons that include this class
+  const slots = [];
+  for (const [lkey, ld] of Object.entries(daySchedule)) {
+    const info = ld.classes && ld.classes[_cls];
+    if (!info) continue;
+    slots.push({ lkey, ld, info });
+  }
+  slots.sort((a,b) => (a.ld.lesson_no||0) - (b.ld.lesson_no||0));
+
+  if (!slots.length) {
+    wrap.innerHTML = `<div class="empty-day">Уроков нет</div>`;
+    return;
+  }
+
+  let html = `<table><thead><tr>
+    <th>№</th><th>Предмет</th><th>Учитель</th><th>Кабинет</th>
+  </tr></thead><tbody>`;
+  for (const { ld, info } of slots) {
+    const groups = info.groups
+      ? Object.entries(info.groups).map(([g,gi]) =>
+          `<tr><td class="num"></td><td class="subj" style="font-weight:400;padding-left:16px;font-size:12px;color:var(--muted)">${esc(g)}: ${esc(gi.subject||"")}${gi._edited?'<span class="edited-badge">✎</span>':''}</td><td class="teacher">${esc(gi.teacher||"")}</td><td class="room">${esc(gi.room||"")}</td></tr>`
+        ).join("")
+      : "";
+    html += `<tr>
+      <td class="num"><b>${ld.lesson_no||""}</b><br><span style="font-size:10px;">${esc(ld.time||"")}</span></td>
+      <td class="subj">${esc(info.subject||"")}${info._edited?'<span class="edited-badge">✎</span>':''}</td>
+      <td class="teacher">${esc(info.teacher||"")}</td>
+      <td class="room">${esc(info.room||"")}</td>
+    </tr>${groups}`;
+  }
+  html += "</tbody></table>";
+  wrap.innerHTML = html;
+
+  // Share bar
+  const shareBar = document.getElementById("shareBar");
+  const url = buildURL();
+  document.getElementById("shareLink").textContent = url;
+  document.getElementById("shareLink").href = url;
+  shareBar.style.display = "flex";
+}
+
+function setDay(d) {
+  _day = d;
+  updateURL();
+  renderDay();
+}
+
+function updateURL() {
+  const url = buildURL();
+  history.replaceState(null, "", url);
+}
+
+function buildURL() {
+  return `${location.origin}/p.html?dept=${encodeURIComponent(_dept)}&cls=${encodeURIComponent(_cls)}&day=${encodeURIComponent(_day)}`;
+}
+
+function share() {
+  const url = buildURL();
+  if (navigator.share) {
+    navigator.share({ title: `Расписание ${_cls} класса — ${_dept}`, url });
+  } else {
+    navigator.clipboard.writeText(url).then(() => alert("Ссылка скопирована!")).catch(() => alert(url));
+  }
+}
+
+function copyLink() {
+  const url = buildURL();
+  navigator.clipboard.writeText(url)
+    .then(() => {
+      const btn = document.querySelector(".share-btn");
+      btn.textContent = "✅ Скопировано!";
+      setTimeout(() => btn.textContent = "📋 Копировать", 1800);
+    })
+    .catch(() => alert(url));
+}
+
+// ── SSE for real-time updates ────────────────────────────────
+function subscribeSSE() {
+  if (_es) { _es.close(); }
+  _es = new EventSource("/api/events");
+  document.getElementById("liveDot").style.display = "";
+
+  _es.addEventListener("schedule_edit", async (e) => {
+    const ev = JSON.parse(e.data);
+    if (!_data || ev.edit.dept !== _dept) return;
+    applyEditToData(ev.edit);
+    renderDay();
+  });
+
+  _es.addEventListener("schedule_revert", async (e) => {
+    const ev = JSON.parse(e.data);
+    if (!_data || ev.dept !== _dept) return;
+    // Reload full schedule for this dept
+    const r = await fetch(`/api/public/schedule?dept=${encodeURIComponent(_dept)}`);
+    if (r.ok) { _data = await r.json(); renderDay(); }
+  });
+
+  _es.onerror = () => {
+    document.getElementById("liveDot").style.display = "none";
+  };
+  _es.onopen = () => {
+    document.getElementById("liveDot").style.display = "";
+  };
+}
+
+function applyEditToData(edit) {
+  if (!_data) return;
+  const day = _data.schedule[edit.day] || {};
+  const lesson = day[edit.lesson_key];
+  if (!lesson) return;
+  if (edit.cleared) {
+    delete lesson.classes[edit.cls];
+  } else {
+    lesson.classes[edit.cls] = {
+      subject: edit.subject, teacher: edit.teacher, room: edit.room,
+      groups: edit.groups, lesson_no: edit.lesson_no, time: edit.time, _edited: true,
+    };
+  }
+}
+
+function esc(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+loadDepts();
+</script>
+</body>
+</html>

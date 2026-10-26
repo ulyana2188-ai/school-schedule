@@ -21,6 +21,16 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const db = require("./db");
 
+// ── SSE broadcast ─────────────────────────────────────────────────────────────
+const _sseClients = new Set();
+function sseBroadcast(event, data) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of _sseClients) {
+    try { res.write(msg); } catch (_) { _sseClients.delete(res); }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const JWT_TTL = "30d";
@@ -180,6 +190,7 @@ app.post("/api/schedule/edits", authMiddleware, requireHead, async (req, res) =>
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [dept, day, lesson_key, cls, before.rows[0] ? 'update' : 'create', before.rows[0] || null, r.rows[0], req.userId]
     );
+    sseBroadcast("schedule_edit", { edit: r.rows[0] });
     res.json({ edit: r.rows[0] });
   } catch (e) {
     console.error(e);
@@ -203,6 +214,10 @@ app.delete("/api/schedule/edits/:dept/:day/:lesson_key/:cls", authMiddleware, re
         [req.params.dept, req.params.day, req.params.lesson_key, req.params.cls, before.rows[0], req.userId]
       );
     }
+    sseBroadcast("schedule_revert", {
+      dept: req.params.dept, day: req.params.day,
+      lesson_key: req.params.lesson_key, cls: req.params.cls,
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error(e); res.status(500).json({ error: "server_error" });
@@ -2034,6 +2049,80 @@ app.get("/api/health", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message) });
+  }
+});
+
+// GET /api/events — Server-Sent Events stream for real-time schedule updates.
+// Auth is optional: unauthenticated clients still receive public schedule-change events.
+app.get("/api/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
+  res.flushHeaders();
+
+  // Initial heartbeat so the browser knows the connection is alive
+  res.write(": heartbeat\n\n");
+
+  _sseClients.add(res);
+
+  // Periodic heartbeat every 25s to prevent proxy timeouts
+  const hbTimer = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch (_) {}
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(hbTimer);
+    _sseClients.delete(res);
+  });
+});
+
+// GET /api/public/depts — no auth; returns list of department names
+app.get("/api/public/depts", (req, res) => {
+  res.json({ depts: Object.keys(SCHEDULE).sort() });
+});
+
+// GET /api/public/schedule — no auth; returns full merged schedule for one class
+// Query: ?dept=X&cls=Y (cls optional — returns all classes if omitted)
+app.get("/api/public/schedule", async (req, res) => {
+  const { dept, cls } = req.query;
+  if (!dept) return res.status(400).json({ error: "dept_required" });
+  try {
+    const edits = await db.query("SELECT * FROM schedule_edits");
+    const editMap = {};
+    for (const e of edits.rows) {
+      editMap[`${e.dept}|${e.day}|${e.lesson_key}|${e.cls}`] = e;
+    }
+    // Merge with static schedule
+    const merged = {};
+    const deptStatic = SCHEDULE[dept];
+    if (!deptStatic) return res.status(404).json({ error: "dept_not_found" });
+    for (const [day, lessons] of Object.entries(deptStatic.schedule || {})) {
+      merged[day] = {};
+      for (const [lkey, lesson] of Object.entries(lessons)) {
+        const classes = {};
+        for (const [c, info] of Object.entries(lesson.classes || {})) {
+          if (cls && c !== cls) continue;
+          const ek = `${dept}|${day}|${lkey}|${c}`;
+          if (editMap[ek]) {
+            const ed = editMap[ek];
+            if (!ed.cleared) {
+              classes[c] = { subject: ed.subject, teacher: ed.teacher, room: ed.room,
+                             groups: ed.groups, lesson_no: ed.lesson_no, time: ed.time, _edited: true };
+            }
+          } else {
+            classes[c] = info;
+          }
+        }
+        if (Object.keys(classes).length > 0) {
+          merged[day][lkey] = { ...lesson, classes };
+        }
+      }
+    }
+    res.json({ dept, classes: deptStatic.classes || [], schedule: merged });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "server_error" });
   }
 });
 

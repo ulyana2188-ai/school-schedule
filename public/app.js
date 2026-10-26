@@ -290,6 +290,8 @@ async function enterApp() {
   startNotificationPolling();
   _updateThemeBtn();
   _patchCellColors();
+  // Start real-time SSE after app loads (defined later in file)
+  if (typeof startSSE === "function") startSSE();
 }
 
 async function loadInitialData() {
@@ -485,11 +487,13 @@ function renderGrid() {
         const items = info ? (info.groups ? info.groups : [info]) : [];
         const hasConflictTeacher = items.some(it => it.teacher && conflictTeachers.has(it.teacher));
         const wasEdited = info && info._edited;
+        const isOptimistic = info && info._optimistic;
         const hasFilteredTeacher = state.teacherFilter && items.some(it => it.teacher === state.teacherFilter);
         const isDimmed = state.teacherFilter && !hasFilteredTeacher;
         const cellClasses = [];
         if (hasConflictTeacher) cellClasses.push("has-conflict");
         if (wasEdited) cellClasses.push("cell-edited");
+        if (isOptimistic) cellClasses.push("_optimistic-cell");
         const canEditHere = EDIT_MODE && canEditDept(state.dept);
         const clickAttr = EDIT_MODE ? `onclick="openCellEditor('${escapeHtml(state.dept)}','${escapeHtml(state.day)}','${escapeHtml(lkey)}','${cls}', ${ld.lesson_no}, '${escapeHtml(ld.time)}')"` : '';
         const dragAttrs = canEditHere
@@ -5680,3 +5684,195 @@ window.renderGrid = function() {
   hint.textContent = "⧉ Нажмите на урок для копирования";
   toolbar.appendChild(hint);
 })();
+
+// ============================================================
+// OPTIMISTIC UPDATES
+// ============================================================
+
+// Apply an edit payload to DATA immediately (before server confirmation).
+// Returns a snapshot for rollback.
+function _optimisticApply(d) {
+  const dept = DATA[d.dept];
+  if (!dept) return null;
+  const lesson = dept.schedule[d.day] && dept.schedule[d.day][d.lesson_key];
+  if (!lesson) return null;
+
+  // Snapshot before state
+  const snapshot = JSON.parse(JSON.stringify(lesson.classes[d.cls] || null));
+
+  // Apply the change
+  if (d.cleared) {
+    delete lesson.classes[d.cls];
+  } else {
+    lesson.classes[d.cls] = {
+      subject:   d.subject   || null,
+      teacher:   d.teacher   || null,
+      room:      d.room      || null,
+      groups:    d.groups    || null,
+      lesson_no: d.lesson_no || null,
+      time:      d.time      || null,
+      _edited:   true,
+      _optimistic: true,  // flag: server not yet confirmed
+    };
+  }
+  return snapshot;
+}
+
+function _optimisticRollback(d, snapshot) {
+  const dept = DATA[d.dept];
+  if (!dept) return;
+  const lesson = dept.schedule[d.day] && dept.schedule[d.day][d.lesson_key];
+  if (!lesson) return;
+  if (snapshot === null) {
+    delete lesson.classes[d.cls];
+  } else {
+    lesson.classes[d.cls] = snapshot;
+  }
+}
+
+function _optimisticConfirm(d) {
+  // Remove the _optimistic flag once server confirms
+  const dept = DATA[d.dept];
+  if (!dept) return;
+  const lesson = dept.schedule[d.day] && dept.schedule[d.day][d.lesson_key];
+  if (!lesson || !lesson.classes[d.cls]) return;
+  delete lesson.classes[d.cls]._optimistic;
+}
+
+// Patch API.saveEdit (on top of the undo wrapper already in place)
+// to apply optimistic update immediately then confirm/rollback.
+const _saveEditWithUndo = API.saveEdit.bind(API);  // already has undo wrapper
+API.saveEdit = async function(d) {
+  const snapshot = _optimisticApply(d);
+  // Re-render immediately with the optimistic data
+  if (state.section === "schedule") render();
+
+  try {
+    const result = await _saveEditWithUndo(d);
+    _optimisticConfirm(d);
+    return result;
+  } catch (e) {
+    // Rollback on error
+    if (snapshot !== undefined) _optimisticRollback(d, snapshot);
+    if (state.section === "schedule") render();
+    throw e;
+  }
+};
+
+// ============================================================
+// REAL-TIME UPDATES (SSE)
+// ============================================================
+
+let _sseSource = null;
+let _sseConnected = false;
+
+function startSSE() {
+  if (_sseSource) return;  // already connected
+  _sseSource = new EventSource("/api/events");
+
+  _sseSource.onopen = () => {
+    _sseConnected = true;
+    _updateLiveBadge(true);
+  };
+
+  _sseSource.onerror = () => {
+    _sseConnected = false;
+    _updateLiveBadge(false);
+    // Browser will auto-reconnect after error; we reset on next open
+  };
+
+  _sseSource.addEventListener("schedule_edit", (e) => {
+    const { edit } = JSON.parse(e.data);
+    // Ignore changes we made ourselves (already applied optimistically)
+    if (!DATA || !DATA[edit.dept]) return;
+    _applySSEEdit(edit);
+  });
+
+  _sseSource.addEventListener("schedule_revert", (e) => {
+    const ev = JSON.parse(e.data);
+    if (!DATA || !DATA[ev.dept]) return;
+    _applySSERevert(ev);
+  });
+}
+
+function _applySSEEdit(edit) {
+  const dept = DATA[edit.dept];
+  if (!dept) return;
+  const lesson = dept.schedule[edit.day] && dept.schedule[edit.day][edit.lesson_key];
+  if (!lesson) return;
+
+  // If the local cell has _optimistic flag, it's our own pending change — skip
+  const current = lesson.classes[edit.cls];
+  if (current && current._optimistic) return;
+
+  if (edit.cleared) {
+    delete lesson.classes[edit.cls];
+  } else {
+    lesson.classes[edit.cls] = {
+      subject:   edit.subject,
+      teacher:   edit.teacher,
+      room:      edit.room,
+      groups:    edit.groups,
+      lesson_no: edit.lesson_no,
+      time:      edit.time,
+      _edited:   true,
+    };
+  }
+  // Rebuild derived caches
+  CONFLICTS = findConflicts();
+  ALL_TEACHERS = buildAllTeachersData();
+  if (state.section === "schedule") render();
+  _showLiveToast(`Расписание обновлено: ${edit.dept} · ${edit.day}`);
+}
+
+function _applySSERevert(ev) {
+  const dept = DATA[ev.dept];
+  if (!dept) return;
+  const lesson = dept.schedule[ev.day] && dept.schedule[ev.day][ev.lesson_key];
+  if (!lesson) return;
+  const current = lesson.classes[ev.cls];
+  if (current && current._optimistic) return;
+
+  // Remove the edit override — revert to static
+  delete lesson.classes[ev.cls];
+
+  // Restore from static schedule (in-memory)
+  // The static schedule is embedded in DATA[dept]._static (we need to store it).
+  // Since we don't store the original, we do a lightweight re-fetch.
+  API.schedule().then(fresh => {
+    const freshLesson = fresh[ev.dept]?.schedule?.[ev.day]?.[ev.lesson_key];
+    if (freshLesson && freshLesson.classes[ev.cls]) {
+      lesson.classes[ev.cls] = freshLesson.classes[ev.cls];
+    }
+    CONFLICTS = findConflicts();
+    ALL_TEACHERS = buildAllTeachersData();
+    if (state.section === "schedule") render();
+    _showLiveToast(`Ячейка восстановлена: ${ev.dept} · ${ev.day}`);
+  }).catch(() => {});
+}
+
+function _updateLiveBadge(connected) {
+  const badge = document.getElementById("liveBadge");
+  if (!badge) return;
+  badge.title = connected ? "Обновления в реальном времени" : "Нет подключения к обновлениям";
+  badge.style.background = connected ? "#22c55e" : "#ef4444";
+}
+
+function _showLiveToast(msg) {
+  let toast = document.getElementById("liveToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "liveToast";
+    toast.style.cssText = `position:fixed;bottom:72px;right:16px;z-index:9999;
+      background:var(--ip-blue);color:#fff;border-radius:8px;padding:8px 14px;
+      font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.25);
+      transition:opacity .3s;pointer-events:none;`;
+    document.body.appendChild(toast);
+  }
+  toast.textContent = "🔄 " + msg;
+  toast.style.opacity = "1";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = "0"; }, 3000);
+}
+
+// startSSE() is called from enterApp() after login.

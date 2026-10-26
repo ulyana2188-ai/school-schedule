@@ -738,3 +738,14 @@ body.edit-mode table.schedule td { position: relative; }
 .btn.active { background: var(--ip-blue) !important; color: #fff !important; border-color: var(--ip-blue) !important; }
 body.copy-mode td[data-cell] { cursor: copy !important; outline: 2px dashed var(--ip-blue); outline-offset: -2px; }
 body.copy-mode td[data-cell]:hover { background: rgba(99,102,241,.12) !important; }
+
+/* ── Optimistic / pending cell indicator ── */
+td._optimistic-cell { opacity: .7; }
+td._optimistic-cell::after {
+  content: "…";
+  font-size: 9px;
+  color: var(--ip-blue);
+  margin-left: 4px;
+  animation: blink 1s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
