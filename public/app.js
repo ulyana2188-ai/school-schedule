@@ -72,6 +72,24 @@ const API = {
       return d;
     });
   },
+  // Full schedule import (replaces base schedule for dept)
+  importFullSchedule(file, dept, preview) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("dept", dept);
+    fd.append("preview", preview ? "true" : "false");
+    return fetch("/api/schedule/import-full", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + this.token },
+      body: fd
+    }).then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.details || d.error || "import_failed");
+      return d;
+    });
+  },
+  getScheduleOverrides() { return this.fetch("/api/schedule/overrides"); },
+  deleteScheduleOverride(dept) { return this.fetch(`/api/schedule/overrides/${encodeURIComponent(dept)}`, { method: "DELETE" }); },
 };
 
 // ============= GLOBAL STATE =============
@@ -1035,6 +1053,10 @@ function initUI() {
     if (sht) sht.style.display = "";
     const genTab = document.getElementById("generatorTab");
     if (genTab) genTab.style.display = "";
+    const impBtn = document.getElementById("importFullBtn");
+    if (impBtn) impBtn.style.display = "";
+    // Show import banner if there are overrides
+    updateImportBanner();
   } else {
     document.getElementById("adminTab").style.display = "none";
     document.getElementById("editModeBtn").style.display = "none";
@@ -1042,6 +1064,8 @@ function initUI() {
     if (sht) sht.style.display = "none";
     const genTab = document.getElementById("generatorTab");
     if (genTab) genTab.style.display = "none";
+    const impBtn = document.getElementById("importFullBtn");
+    if (impBtn) impBtn.style.display = "none";
   }
   // Show "Моё расписание" if user has any teaching hours (teachers + heads who also teach)
   const myTab = document.getElementById("myTab");
@@ -1371,6 +1395,125 @@ async function importExcelFile(input) {
     alert("Ошибка импорта: " + e.message);
     input.value = "";
   }
+}
+
+// ============= FULL SCHEDULE IMPORT =============
+let _importFullFile = null;
+let _importFullPreviewData = null;
+
+async function openImportFullModal() {
+  _importFullFile = null;
+  _importFullPreviewData = null;
+  document.getElementById("importFullFile").value = "";
+  document.getElementById("importFullFileLabel").textContent = "Выбрать файл (.xlsx)";
+  document.getElementById("importFullPreview").style.display = "none";
+  document.getElementById("importFullError").textContent = "";
+  document.getElementById("importFullSubmit").disabled = true;
+
+  // Populate dept select
+  const myDepts = getMyAllowedDepts();
+  const sel = document.getElementById("importFullDept");
+  sel.innerHTML = myDepts.map(d => `<option value="${d}">${d}</option>`).join("");
+  // Pre-select current dept if available
+  if (myDepts.includes(state.dept)) sel.value = state.dept;
+
+  // Load and show current override status
+  const statusEl = document.getElementById("importFullCurrentStatus");
+  try {
+    const ovr = await API.getScheduleOverrides();
+    if (ovr.overrides && ovr.overrides.length > 0) {
+      const lines = ovr.overrides.map(o => {
+        const d = new Date(o.imported_at);
+        const ds = d.toLocaleDateString("ru-RU", {day:"2-digit",month:"2-digit",year:"2-digit"});
+        const by = o.imported_by_name ? ` · загрузил(а) ${o.imported_by_name}` : "";
+        return `<b>${o.dept}</b>: загружено ${ds}${by} <button class="link-btn" style="margin-left:6px;font-size:11px;color:#B91C1C;" onclick="resetScheduleOverride('${o.dept}')">Сбросить</button>`;
+      });
+      statusEl.innerHTML = `<b style="font-size:11px;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;">Загруженные расписания</b><br>${lines.join("<br>")}`;
+      statusEl.style.display = "";
+    } else {
+      statusEl.style.display = "none";
+    }
+  } catch(e) { statusEl.style.display = "none"; }
+
+  document.getElementById("importFullModal").classList.add("show");
+}
+
+async function onImportFullFileChange(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _importFullFile = file;
+  _importFullPreviewData = null;
+  document.getElementById("importFullFileLabel").textContent = file.name;
+  document.getElementById("importFullError").textContent = "";
+  document.getElementById("importFullPreview").style.display = "none";
+  document.getElementById("importFullSubmit").disabled = true;
+
+  const dept = document.getElementById("importFullDept").value;
+  try {
+    const prev = await API.importFullSchedule(file, dept, true);
+    _importFullPreviewData = prev;
+    const preview = document.getElementById("importFullPreview");
+    preview.innerHTML = `✅ Распознано: <b>${prev.total} уроков</b>, ${prev.classes.length} классов (${prev.classes.join(", ")}), ${prev.days} дней недели`;
+    preview.style.display = "";
+    document.getElementById("importFullSubmit").disabled = false;
+  } catch(e) {
+    document.getElementById("importFullError").textContent = "Ошибка предпросмотра: " + e.message;
+    document.getElementById("importFullPreview").style.display = "none";
+  }
+}
+
+async function doImportFull() {
+  if (!_importFullFile) return;
+  const dept = document.getElementById("importFullDept").value;
+  document.getElementById("importFullSubmit").disabled = true;
+  document.getElementById("importFullError").textContent = "";
+  try {
+    const r = await API.importFullSchedule(_importFullFile, dept, false);
+    document.getElementById("importFullModal").classList.remove("show");
+    // Refresh data
+    await reloadSchedule();
+    setDept(dept);
+    // Show status banner
+    showImportBanner(dept, r.total);
+  } catch(e) {
+    document.getElementById("importFullError").textContent = "Ошибка: " + e.message;
+    document.getElementById("importFullSubmit").disabled = false;
+  }
+}
+
+async function resetScheduleOverride(dept) {
+  if (!confirm(`Сбросить загруженное расписание для «${dept}»? Система вернётся к исходным данным.`)) return;
+  try {
+    await API.deleteScheduleOverride(dept);
+    await reloadSchedule();
+    render();
+    await openImportFullModal(); // refresh modal
+    updateImportBanner();
+  } catch(e) { alert("Ошибка: " + e.message); }
+}
+
+function showImportBanner(dept, total) {
+  const el = document.getElementById("importStatusBanner");
+  if (!el) return;
+  el.innerHTML = `✅ Расписание «${escapeHtml(dept)}» загружено (${total} уроков) &nbsp;·&nbsp; <button class="link-btn" style="font-size:11px;" onclick="resetScheduleOverride('${escapeHtml(dept)}')">Сбросить</button>`;
+  el.style.display = "flex";
+}
+
+async function updateImportBanner() {
+  const el = document.getElementById("importStatusBanner");
+  if (!el) return;
+  try {
+    const ovr = await API.getScheduleOverrides();
+    const myDepts = getMyAllowedDepts();
+    const mine = (ovr.overrides || []).filter(o => myDepts.includes(o.dept));
+    if (mine.length > 0) {
+      const parts = mine.map(o => `«${o.dept}»`).join(", ");
+      el.innerHTML = `📋 Загружено расписание: ${parts} &nbsp;·&nbsp; <button class="link-btn" style="font-size:11px;" onclick="openImportFullModal()">Управление</button>`;
+      el.style.display = "flex";
+    } else {
+      el.style.display = "none";
+    }
+  } catch(e) { el.style.display = "none"; }
 }
 
 // ============= TEACHER CARD =============

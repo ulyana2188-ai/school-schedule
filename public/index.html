@@ -195,7 +195,9 @@
       </div>
       <button class="btn secondary" onclick="printSchedule()" style="margin-left:6px;">🖨 Печать</button>
       <button id="editModeBtn" class="btn secondary" onclick="toggleEditMode()" style="display:none;margin-left:6px;">✎ Редактировать</button>
+      <button id="importFullBtn" class="btn" onclick="openImportFullModal()" style="display:none;margin-left:6px;" title="Загрузить готовое расписание из Excel">⤴ Загрузить расписание</button>
     </div>
+    <div id="importStatusBanner" style="display:none;padding:6px 14px;background:#EEF6FF;border-top:1px solid #BFDBFE;font-size:12px;color:#1D4ED8;align-items:center;gap:10px;"></div>
   </div>
 
   <!-- TEACHERS SECTION -->
@@ -549,6 +551,44 @@
       <button class="btn" onclick="runGenerate()" id="genBtn">▶ Сгенерировать</button>
     </div>
     <div id="genErr" class="login-error"></div>
+  </div>
+</div>
+
+<!-- Import Full Schedule Modal -->
+<div class="modal-bg" id="importFullModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span id="importFullTitle">Загрузить расписание</span>
+      <button class="link-btn" onclick="document.getElementById('importFullModal').classList.remove('show')" style="font-size:14px;">✕</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted);">
+        Загрузите Excel-файл с готовым расписанием. Файл заменит текущие данные для выбранного отделения.
+      </p>
+      <p style="margin:0 0 16px;font-size:12px;color:var(--text-muted);">
+        <b>Поддерживаемые форматы:</b><br>
+        · <b>Плоский</b>: столбцы «Класс», «День», «Урок», «Время», «Предмет», «Учитель», «Кабинет»<br>
+        · <b>Сетка</b>: строки с днями, столбцы «1 класс», «2 класс» и т.д.
+      </p>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">ОТДЕЛЕНИЕ</label>
+        <select id="importFullDept" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:white;"></select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">ФАЙЛ EXCEL</label>
+        <label class="btn secondary" style="cursor:pointer;width:100%;box-sizing:border-box;text-align:center;display:block;">
+          <span id="importFullFileLabel">Выбрать файл (.xlsx)</span>
+          <input type="file" accept=".xlsx,.xls" id="importFullFile" onchange="onImportFullFileChange(this)" style="display:none;">
+        </label>
+      </div>
+      <div id="importFullPreview" style="display:none;margin-bottom:14px;padding:10px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;font-size:13px;"></div>
+      <div id="importFullError" style="color:#B91C1C;font-size:13px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn secondary" onclick="document.getElementById('importFullModal').classList.remove('show')">Отмена</button>
+        <button id="importFullSubmit" class="btn" onclick="doImportFull()" disabled>Загрузить</button>
+      </div>
+      <div id="importFullCurrentStatus" style="margin-top:14px;padding:10px 12px;background:#F9FAFB;border-radius:6px;font-size:12px;display:none;"></div>
+    </div>
   </div>
 </div>
 

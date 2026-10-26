@@ -230,3 +230,12 @@ CREATE TABLE IF NOT EXISTS schedule_slots (
 CREATE INDEX IF NOT EXISTS idx_slots_version ON schedule_slots(version_id, dept);
 CREATE INDEX IF NOT EXISTS idx_slots_teacher ON schedule_slots(teacher_id, day_of_week, lesson_no);
 CREATE INDEX IF NOT EXISTS idx_slots_cls ON schedule_slots(version_id, cls, day_of_week);
+
+-- Full schedule overrides: when a dept's schedule is imported from Excel,
+-- it is stored here and takes precedence over schedule.json for that dept.
+CREATE TABLE IF NOT EXISTS schedule_overrides (
+  dept        TEXT PRIMARY KEY,
+  data        JSONB NOT NULL,
+  imported_by INT REFERENCES users(id),
+  imported_at TIMESTAMPTZ DEFAULT NOW()
+);

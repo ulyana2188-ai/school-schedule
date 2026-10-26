@@ -111,11 +111,16 @@ app.get("/api/accounts", authMiddleware, async (req, res) => {
   res.json({ accounts: r.rows });
 });
 
-// === Schedule (static + overrides from DB) ===
+// === Schedule (static + full overrides + cell edits from DB) ===
 app.get("/api/schedule", authMiddleware, async (req, res) => {
-  // Deep clone of static schedule
+  // Start from static schedule.json, then apply full overrides, then cell edits
   const sched = JSON.parse(JSON.stringify(SCHEDULE));
   try {
+    // 1. Apply full schedule overrides (replaces base schedule.json for that dept)
+    const ovr = await db.query("SELECT dept, data FROM schedule_overrides");
+    for (const row of ovr.rows) {
+      sched[row.dept] = row.data;
+    }
     const r = await db.query("SELECT * FROM schedule_edits");
     for (const ed of r.rows) {
       if (!sched[ed.dept]) continue;
@@ -539,6 +544,201 @@ app.post("/api/schedule/import", authMiddleware, requireHead, upload.single("fil
     res.json({ ok: true, saved, total: lessons.length });
   } catch (e) {
     console.error("Import error:", e);
+    res.status(500).json({ error: "parse_failed", details: String(e.message) });
+  }
+});
+
+// === Full schedule import (saves to schedule_overrides, replaces base schedule.json for dept) ===
+
+// Helper: parse xlsx into a full schedule object { classes, schedule }
+// Supports two formats:
+//   FLAT: headers Класс | День | Урок | Время | Предмет | Учитель | Кабинет (one row per lesson)
+//   GRID: days as section labels, class columns (existing format)
+function parseFullScheduleSheet(workbook, dept) {
+  const DAYS_MAP = {
+    "понедельник": "Понедельник", "вторник": "Вторник", "среда": "Среда",
+    "четверг": "Четверг", "пятница": "Пятница"
+  };
+  const HEADER_KEYS = {
+    cls: ["класс","группа","кл","class"],
+    day: ["день","day","дата"],
+    lesson_no: ["урок","№","номер","lesson","no","num","п/п"],
+    time: ["время","time","часы"],
+    subject: ["предмет","дисциплина","subject","занятие"],
+    teacher: ["учитель","педагог","преподаватель","учитель"],
+    room: ["кабинет","ауд","room","кааудитория","аудитория","зал"],
+  };
+
+  const classSet = new Set();
+  // lessons: array of { cls, day, lesson_no, time, subject, teacher, room }
+  const lessons = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const ws = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(ws, { header: 1, defval: null });
+    if (!rows.length) continue;
+
+    // Detect format: look for flat header row
+    let flatColMap = null; // { cls, day, lesson_no, time, subject, teacher, room } -> colIdx
+    for (let r = 0; r < Math.min(rows.length, 5); r++) {
+      const row = (rows[r] || []).map(c => c == null ? "" : String(c).toLowerCase().trim());
+      const found = {};
+      for (const [key, syns] of Object.entries(HEADER_KEYS)) {
+        for (let c = 0; c < row.length; c++) {
+          if (syns.some(s => row[c].includes(s))) { found[key] = c; break; }
+        }
+      }
+      // Need at least cls + day + subject
+      if (found.cls !== undefined && found.day !== undefined && found.subject !== undefined) {
+        flatColMap = found;
+        // Parse flat rows
+        for (let i = r + 1; i < rows.length; i++) {
+          const dr = rows[i];
+          if (!dr) continue;
+          const cls = dr[found.cls] != null ? String(dr[found.cls]).trim() : null;
+          const dayRaw = dr[found.day] != null ? String(dr[found.day]).toLowerCase().trim() : null;
+          const subjRaw = dr[found.subject] != null ? String(dr[found.subject]).trim() : null;
+          if (!cls || !dayRaw || !subjRaw) continue;
+          const day = DAYS_MAP[dayRaw] || null;
+          if (!day) continue;
+          const lesson_no = found.lesson_no != null && dr[found.lesson_no] != null ? parseInt(dr[found.lesson_no]) : null;
+          const time = found.time != null && dr[found.time] != null ? String(dr[found.time]).trim() : null;
+          const teacher = found.teacher != null && dr[found.teacher] != null ? String(dr[found.teacher]).trim() : null;
+          const room = found.room != null && dr[found.room] != null ? String(dr[found.room]).trim() : null;
+          classSet.add(cls);
+          lessons.push({ cls, day, lesson_no, time, subject: subjRaw, teacher: teacher || null, room: room || null });
+        }
+        break;
+      }
+    }
+
+    // If flat not found, try grid format
+    if (!flatColMap) {
+      let currentDay = null;
+      let classCols = {};
+      for (let r = 0; r < rows.length; r++) {
+        const row = rows[r] || [];
+        let headerFound = false;
+        for (let c = 0; c < row.length; c++) {
+          const v = row[c];
+          if (!v) continue;
+          const m = String(v).match(/^\s*(\d{1,2}[а-яёА-ЯЁ]?)\s*(класс|кл\.?)?\s*$/i);
+          if (m) { classCols[c] = m[1]; headerFound = true; }
+        }
+        if (headerFound) continue;
+        for (const cell of row) {
+          if (!cell) continue;
+          const lower = String(cell).toLowerCase().trim();
+          if (DAYS_MAP[lower]) { currentDay = DAYS_MAP[lower]; break; }
+        }
+        let lessonNo = null, time = null;
+        for (let c = 0; c < Math.min(row.length, 5); c++) {
+          const v = row[c];
+          if (v == null) continue;
+          const sv = String(v).trim();
+          if (/^\d{1,2}$/.test(sv) && parseInt(sv) >= 1 && parseInt(sv) <= 14) {
+            if (lessonNo === null) lessonNo = parseInt(sv);
+          } else if (/\d{1,2}[.:]\d{2}\s*[-—–]\s*\d{1,2}[.:]\d{2}/.test(sv)) {
+            time = sv;
+          }
+        }
+        if (lessonNo === null || !currentDay) continue;
+        for (const c in classCols) {
+          const cls = classCols[c];
+          const cellVal = row[c];
+          if (!cellVal) continue;
+          const text = String(cellVal).trim();
+          if (!text) continue;
+          // Split subject/teacher: "Математика Иванова А.В." or "Математика\nИванова А.В."
+          const lines = text.split(/\n/);
+          const subject = lines[0].trim();
+          const teacherMatch = (lines[1] || "").trim() || text.match(/^(.+?)\s+([А-ЯЁ][а-яё]+\s+[А-ЯЁ]\.?[А-ЯЁ]?\.?)\s*$/)?.[2] || null;
+          classSet.add(cls);
+          lessons.push({ cls, day: currentDay, lesson_no: lessonNo, time, subject, teacher: teacherMatch || null, room: null });
+        }
+      }
+    }
+  }
+
+  if (!lessons.length) return null;
+
+  // Build schedule.json structure
+  const classesArr = Array.from(classSet).sort((a, b) => {
+    const na = parseInt(a); const nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b, "ru");
+  });
+
+  const schedule = {};
+  for (const L of lessons) {
+    if (!L.day) continue;
+    if (!schedule[L.day]) schedule[L.day] = {};
+    const timeClean = (L.time || "").replace(/[.:]/g, ".").replace(/\s/g, "");
+    const lkey = `${L.lesson_no || "?"}|${timeClean}`;
+    if (!schedule[L.day][lkey]) {
+      schedule[L.day][lkey] = { lesson_no: L.lesson_no || 0, time: L.time || "", classes: {} };
+    }
+    schedule[L.day][lkey].classes[L.cls] = {
+      subject: L.subject, teacher: L.teacher, room: L.room
+    };
+  }
+
+  return { classes: classesArr, schedule };
+}
+
+// GET /api/schedule/overrides — list depts that have a full import
+app.get("/api/schedule/overrides", authMiddleware, async (req, res) => {
+  const r = await db.query(
+    "SELECT dept, imported_at, u.name as imported_by_name FROM schedule_overrides o LEFT JOIN users u ON u.id=o.imported_by ORDER BY dept"
+  );
+  res.json({ overrides: r.rows });
+});
+
+// DELETE /api/schedule/overrides/:dept — revert to base schedule.json
+app.delete("/api/schedule/overrides/:dept", authMiddleware, requireHead, async (req, res) => {
+  const dept = decodeURIComponent(req.params.dept);
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  if (!allowedDepts.includes(dept) && req.user.role !== "director")
+    return res.status(403).json({ error: "wrong_dept" });
+  await db.query("DELETE FROM schedule_overrides WHERE dept=$1", [dept]);
+  res.json({ ok: true });
+});
+
+// POST /api/schedule/import-full — upload xlsx, parse, save full schedule to schedule_overrides
+app.post("/api/schedule/import-full", authMiddleware, requireHead, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "no_file" });
+  const dept = req.body.dept;
+  if (!dept) return res.status(400).json({ error: "no_dept" });
+  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  if (!allowedDepts.includes(dept) && req.user.role !== "director")
+    return res.status(403).json({ error: "wrong_dept" });
+  try {
+    const wb = xlsx.read(req.file.buffer, { type: "buffer" });
+    const parsed = parseFullScheduleSheet(wb, dept);
+    if (!parsed) return res.status(400).json({ error: "parse_failed", details: "Не удалось распознать расписание. Проверьте формат файла." });
+
+    // Count lessons for preview
+    let total = 0;
+    for (const day of Object.values(parsed.schedule)) {
+      for (const ldata of Object.values(day)) {
+        total += Object.keys(ldata.classes).length;
+      }
+    }
+
+    if (req.body.preview === "true") {
+      return res.json({ classes: parsed.classes, total, days: Object.keys(parsed.schedule).length });
+    }
+
+    // Save to schedule_overrides
+    await db.query(
+      `INSERT INTO schedule_overrides (dept, data, imported_by, imported_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (dept) DO UPDATE SET data=EXCLUDED.data, imported_by=EXCLUDED.imported_by, imported_at=NOW()`,
+      [dept, JSON.stringify(parsed), req.userId]
+    );
+    res.json({ ok: true, total, classes: parsed.classes });
+  } catch (e) {
+    console.error("Full import error:", e);
     res.status(500).json({ error: "parse_failed", details: String(e.message) });
   }
 });
