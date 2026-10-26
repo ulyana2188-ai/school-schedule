@@ -303,3 +303,25 @@ CREATE TABLE IF NOT EXISTS absence_requests (
 CREATE INDEX IF NOT EXISTS idx_absreq_teacher ON absence_requests(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_absreq_dept ON absence_requests(dept);
 CREATE INDEX IF NOT EXISTS idx_absreq_status ON absence_requests(status);
+
+-- ============================================================
+-- WEB PUSH SUBSCRIPTIONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id          SERIAL PRIMARY KEY,
+  user_id     INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  endpoint    TEXT NOT NULL,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, endpoint)
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+
+-- Add status column to replacements if it doesn't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='replacements' AND column_name='response_status') THEN
+    ALTER TABLE replacements ADD COLUMN response_status TEXT DEFAULT 'pending' CHECK (response_status IN ('pending','confirmed','declined'));
+    ALTER TABLE replacements ADD COLUMN responded_at TIMESTAMPTZ;
+  END IF;
+END $$;

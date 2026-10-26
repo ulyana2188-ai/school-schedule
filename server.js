@@ -262,6 +262,8 @@ app.post("/api/replacements", authMiddleware, async (req, res) => {
           "INSERT INTO notifications (to_user_id, title, body, replacement_id) VALUES ($1,$2,$3,$4)",
           [uid, title, body, rep.id]
         );
+        // Send push notification (non-blocking)
+        sendPushToUser(uid, title, body).catch(() => {});
       }
     }
 
@@ -290,7 +292,11 @@ app.get("/api/replacements", authMiddleware, async (req, res) => {
 // === Notifications ===
 app.get("/api/notifications", authMiddleware, async (req, res) => {
   const r = await db.query(
-    "SELECT * FROM notifications WHERE to_user_id=$1 ORDER BY created_at DESC LIMIT 100",
+    `SELECT n.*, r.response_status
+     FROM notifications n
+     LEFT JOIN replacements r ON r.id = n.replacement_id
+     WHERE n.to_user_id=$1
+     ORDER BY n.created_at DESC LIMIT 100`,
     [req.userId]
   );
   res.json({ notifications: r.rows });
@@ -1269,6 +1275,90 @@ app.post("/api/generate", authMiddleware, requireHead, async (req, res) => {
 });
 
 // ============================================================
+// WEB PUSH
+// ============================================================
+const webpush = require("web-push");
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC || "BGPDVBPRNGbXufaQkIvS9Em86-CqmVxWHv4NmAUE4Ox0pJ_UQFdPWiuBoG8Z9maeRqNOS3MAMFpr3G4LsKcQqu0";
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE || "UqPDr_8--1H_dGrdJAm3ENOENBv3_PsZot8Hz_aL-Q4";
+webpush.setVapidDetails("mailto:admin@intellekt-plus.ru", VAPID_PUBLIC, VAPID_PRIVATE);
+
+// GET /api/push/vapid-public-key
+app.get("/api/push/vapid-public-key", (req, res) => res.json({ key: VAPID_PUBLIC }));
+
+// POST /api/push/subscribe — save push subscription for current user
+app.post("/api/push/subscribe", authMiddleware, async (req, res) => {
+  const { endpoint, keys } = req.body || {};
+  if (!endpoint || !keys?.p256dh || !keys?.auth) return res.status(400).json({ error: "bad_subscription" });
+  await db.query(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth`,
+    [req.userId, endpoint, keys.p256dh, keys.auth]
+  );
+  res.json({ ok: true });
+});
+
+// DELETE /api/push/subscribe — remove subscription
+app.delete("/api/push/subscribe", authMiddleware, async (req, res) => {
+  const { endpoint } = req.body || {};
+  if (endpoint) {
+    await db.query("DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2", [req.userId, endpoint]);
+  } else {
+    await db.query("DELETE FROM push_subscriptions WHERE user_id=$1", [req.userId]);
+  }
+  res.json({ ok: true });
+});
+
+// Helper: send push to a user
+async function sendPushToUser(userId, title, body, url = "/") {
+  try {
+    const subs = await db.query("SELECT * FROM push_subscriptions WHERE user_id=$1", [userId]);
+    const payload = JSON.stringify({ title, body, url, icon: "/icon-192.png", tag: "ip-" + Date.now() });
+    for (const sub of subs.rows) {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+      } catch (e) {
+        // Remove expired subscriptions
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          await db.query("DELETE FROM push_subscriptions WHERE id=$1", [sub.id]);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Push error:", e.message);
+  }
+}
+
+// ============================================================
+// REPLACEMENT CONFIRMATION (teacher accepts/declines their assignment)
+// ============================================================
+
+// PATCH /api/replacements/:id/respond — replacement teacher responds
+app.patch("/api/replacements/:id/respond", authMiddleware, async (req, res) => {
+  const { status } = req.body || {};
+  if (!["confirmed", "declined"].includes(status)) return res.status(400).json({ error: "bad_status" });
+  const r = await db.query("SELECT * FROM replacements WHERE id=$1", [req.params.id]);
+  if (!r.rows[0]) return res.status(404).json({ error: "not_found" });
+  const repl = r.rows[0];
+  // Only the replacement teacher can respond
+  if (repl.replacement_user_id !== req.userId) return res.status(403).json({ error: "forbidden" });
+  await db.query(
+    "UPDATE replacements SET response_status=$1, responded_at=NOW() WHERE id=$2",
+    [status, req.params.id]
+  );
+  // Notify the head who created the replacement
+  const creator = await db.query("SELECT * FROM users WHERE id=$1", [repl.created_by]);
+  const responder = await db.query("SELECT name FROM users WHERE id=$1", [req.userId]);
+  if (creator.rows[0]) {
+    const statusLabel = status === "confirmed" ? "✅ подтвердил" : "❌ отклонил";
+    const title = `Замена ${statusLabel}`;
+    const body = `${responder.rows[0]?.name} ${statusLabel} замену на ${repl.day}, урок ${repl.lesson_no || ""} (${repl.subject || "—"}, ${repl.cls || "—"})`;
+    await db.query("INSERT INTO notifications (to_user_id, title, body, replacement_id) VALUES ($1,$2,$3,$4)", [creator.rows[0].id, title, body, repl.id]);
+    await sendPushToUser(creator.rows[0].id, title, body);
+  }
+  res.json({ ok: true });
+});
+
+// ============================================================
 // ABSENCE REQUESTS (teacher self-report sick / personal day)
 // ============================================================
 
@@ -1335,6 +1425,7 @@ app.post("/api/absence-requests", authMiddleware, async (req, res) => {
         "INSERT INTO notifications (to_user_id, title, body) VALUES ($1,$2,$3)",
         [h.id, title, body]
       );
+      sendPushToUser(h.id, title, body).catch(() => {});
     }
     res.json({ request: req_ });
   } catch (e) {

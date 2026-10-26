@@ -90,6 +90,12 @@ const API = {
   },
   getScheduleOverrides() { return this.fetch("/api/schedule/overrides"); },
   deleteScheduleOverride(dept) { return this.fetch(`/api/schedule/overrides/${encodeURIComponent(dept)}`, { method: "DELETE" }); },
+  // Push notifications
+  pushVapidKey() { return this.fetch("/api/push/vapid-public-key"); },
+  pushSubscribe(sub) { return this.fetch("/api/push/subscribe", { method: "POST", body: JSON.stringify(sub) }); },
+  pushUnsubscribe(endpoint) { return this.fetch("/api/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) }); },
+  // Replacement response
+  respondToReplacement(id, status) { return this.fetch(`/api/replacements/${id}/respond`, { method: "PATCH", body: JSON.stringify({ status }) }); },
   // Absence requests (teacher self-report)
   absenceRequests() { return this.fetch("/api/absence-requests"); },
   createAbsenceRequest(d) { return this.fetch("/api/absence-requests", { method: "POST", body: JSON.stringify(d) }); },
@@ -697,6 +703,9 @@ function renderUserMenu() {
     </div>
     ${hasLessons ? `<div style="padding:4px 14px 8px;"><button onclick="quickSickToday()" class="btn" style="width:100%;background:var(--ip-magenta);">🤒 Я не выхожу сегодня</button></div>` : ''}
     ${hasLessons ? `<div style="padding:4px 14px 8px;"><button onclick="openMyCard()" class="link-btn" style="font-size:12px;">👤 Моя карточка</button></div>` : ''}
+    <div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
+      <button id="pushToggleBtn" onclick="togglePushNotifications()" class="link-btn" style="font-size:12px;display:none;">🔔 Включить уведомления</button>
+    </div>
     <div style="padding:4px 14px 8px;border-top:1px solid var(--border);"><button onclick="logout()" class="link-btn" style="font-size:12px;color:var(--ip-magenta);">⏏ Выйти</button></div>
   `;
 }
@@ -726,7 +735,7 @@ function toggleUserMenu() {
   const m = document.getElementById("userMenu");
   m.classList.toggle("show");
   document.getElementById("inbox").classList.remove("show");
-  if (m.classList.contains("show")) renderUserMenu();
+  if (m.classList.contains("show")) { renderUserMenu(); renderPushBtn(); }
 }
 
 // ============= NOTIFICATIONS =============
@@ -752,12 +761,41 @@ function renderBell() {
 function renderInbox() {
   const list = document.getElementById("inboxList");
   if (NOTIFICATIONS.length === 0) { list.innerHTML = `<div class="inbox-empty">Нет уведомлений</div>`; return; }
-  list.innerHTML = NOTIFICATIONS.map(n => `
-    <div class="inbox-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id})">
+  list.innerHTML = NOTIFICATIONS.map(n => {
+    // Parse replacement id from metadata if present
+    const replacementId = n.replacement_id || null;
+    const respStatus = n.response_status || null; // 'pending'/'confirmed'/'declined'
+    const isReplacementNotif = replacementId && CURRENT_USER && CURRENT_USER.role !== "head";
+    let actionBtns = "";
+    if (isReplacementNotif && respStatus === "pending") {
+      actionBtns = `<div style="display:flex;gap:8px;margin-top:8px;" onclick="event.stopPropagation()">
+        <button class="btn" style="padding:4px 12px;font-size:12px;background:var(--ip-green,#10b981);" onclick="respondReplacement(${replacementId},'confirmed',this)">✓ Принять</button>
+        <button class="btn" style="padding:4px 12px;font-size:12px;background:var(--ip-magenta);" onclick="respondReplacement(${replacementId},'declined',this)">✗ Отклонить</button>
+      </div>`;
+    } else if (isReplacementNotif && respStatus) {
+      const lbl = respStatus === "confirmed" ? "✓ Принято" : "✗ Отклонено";
+      const clr = respStatus === "confirmed" ? "var(--ip-green,#10b981)" : "var(--ip-magenta)";
+      actionBtns = `<div style="margin-top:6px;font-size:12px;color:${clr};">${lbl}</div>`;
+    }
+    return `<div class="inbox-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id})">
       <div><b>${escapeHtml(n.title)}</b></div>
       <div style="margin-top:3px;">${escapeHtml(n.body)}</div>
+      ${actionBtns}
       <div class="when">${fmtWhen(n.created_at)}</div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
+}
+
+async function respondReplacement(id, status, btn) {
+  btn.disabled = true;
+  try {
+    await API.respondToReplacement(id, status);
+    showToast(status === "confirmed" ? "Замена подтверждена ✓" : "Замена отклонена");
+    await refreshNotifications();
+  } catch (e) {
+    btn.disabled = false;
+    alert("Ошибка: " + e.message);
+  }
 }
 async function markRead(id) {
   await API.readNotif(id);
@@ -1103,6 +1141,81 @@ function initUI() {
   renderBell();
   // Start polling unread chat count
   startChatUnreadPoll();
+  // Register service worker + push
+  initPWA();
+}
+
+// ============= PWA + PUSH =============
+let _swReg = null;
+
+async function initPWA() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    _swReg = await navigator.serviceWorker.register("/sw.js");
+  } catch (e) { console.warn("SW registration failed:", e); }
+  // Restore push button state
+  renderPushBtn();
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function togglePushNotifications() {
+  if (!_swReg) { alert("Service Worker не зарегистрирован. Обновите страницу."); return; }
+  const existing = await _swReg.pushManager.getSubscription();
+  if (existing) {
+    // Unsubscribe
+    await existing.unsubscribe();
+    await API.pushUnsubscribe(existing.endpoint).catch(() => {});
+    renderPushBtn();
+    showToast("Уведомления отключены");
+    return;
+  }
+  // Subscribe
+  try {
+    const { publicKey } = await API.pushVapidKey();
+    const sub = await _swReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+    const json = sub.toJSON();
+    await API.pushSubscribe({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+    renderPushBtn();
+    showToast("Уведомления включены 🔔");
+  } catch (e) {
+    console.warn("Push subscribe error:", e);
+    alert("Не удалось подписаться на уведомления: " + e.message);
+  }
+}
+
+async function renderPushBtn() {
+  const btn = document.getElementById("pushToggleBtn");
+  if (!btn) return;
+  if (!("PushManager" in window) || !_swReg) {
+    btn.style.display = "none"; return;
+  }
+  const sub = await _swReg.pushManager.getSubscription().catch(() => null);
+  btn.innerHTML = sub ? "🔕 Уведомления вкл" : "🔔 Включить уведомления";
+  btn.classList.toggle("active", !!sub);
+  btn.style.display = "";
+}
+
+function showToast(msg) {
+  let t = document.getElementById("ipToast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "ipToast";
+    t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;transition:opacity .4s;";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = "1";
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.opacity = "0"; }, 3000);
 }
 
 // Login enter-key shortcuts
@@ -2294,15 +2407,49 @@ function renderMy() {
   const today = todayDayName();
   if (view === "today" && state.myDay !== today) state.myDay = today;
 
-  // Stats
+  // Build full week schedule (aggregated across ALL depts)
   const week = teacherWeekSchedule(u.name);
+
+  // Detect conflicts: same time slot used in 2+ depts on the same day
+  const conflicts = {}; // { day: { time: [dept1, dept2...] } }
+  for (const day of DAYS) {
+    const byTime = {};
+    for (const L of week[day]) {
+      if (!byTime[L.time]) byTime[L.time] = [];
+      byTime[L.time].push(L.dept);
+    }
+    for (const [time, depts] of Object.entries(byTime)) {
+      if (depts.length > 1) {
+        if (!conflicts[day]) conflicts[day] = {};
+        conflicts[day][time] = depts;
+      }
+    }
+  }
+  const totalConflicts = Object.values(conflicts).reduce((s, dc) => s + Object.keys(dc).length, 0);
+
   let weekHours = 0;
   for (const d of DAYS) weekHours += week[d].length;
 
+  // Dept badges for multi-campus
+  const myDepts = u.depts && u.depts.length > 1 ? u.depts : (u.dept ? [u.dept] : []);
+  const multiCampus = myDepts.length > 1;
+  const deptBadges = myDepts.map(d => `<span style="background:var(--card-bg,#1e293b);border:1px solid var(--border);padding:2px 8px;border-radius:12px;font-size:11px;">${escapeHtml(d)}</span>`).join(" ");
+
   let html = `<div class="today-greeting">
     <h2>Моё расписание</h2>
-    <div class="day-of-week">${escapeHtml(u.name)} · ${weekHours} часов в неделю</div>
+    <div class="day-of-week">${escapeHtml(u.name)} · ${weekHours} часов в неделю${multiCampus ? ` · <span title="Работает в нескольких корпусах">🏢 ${myDepts.length} корпуса</span>` : ""}</div>
+    ${multiCampus ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">${deptBadges}</div>` : ""}
   </div>`;
+
+  // Conflict banner
+  if (totalConflicts > 0) {
+    const conflictDetails = Object.entries(conflicts).flatMap(([day, byTime]) =>
+      Object.entries(byTime).map(([time, depts]) => `${day} ${time} (${depts.join(" / ")})`)).join("; ");
+    html += `<div style="background:#7f1d1d22;border:1px solid #f87171;border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#f87171;">
+      <b>⚠ Конфликты расписания: ${totalConflicts}</b>
+      <div style="font-size:12px;margin-top:4px;">${escapeHtml(conflictDetails)}</div>
+    </div>`;
+  }
 
   // View switch
   html += `<div class="toolbar" style="margin-bottom:10px;">
@@ -2321,7 +2468,7 @@ function renderMy() {
 
   if (view === "today" || view === "day") {
     const day = view === "today" ? today : state.myDay;
-    const lessons = teacherLessonsForDay(u.name, day);
+    const lessons = week[day] || [];
     if (lessons.length === 0) {
       html += `<div class="today-list"><div class="history-empty">${day === today ? "Сегодня" : day} у вас нет уроков 🎉</div></div>`;
     } else {
@@ -2329,8 +2476,12 @@ function renderMy() {
       html += `<div class="today-list">`;
       for (const L of lessons) {
         const status = (view === "today") ? lessonTimeStatus(L.time) : "future";
-        const tags = (status === "now") ? `<span class="today-tag tag-now">сейчас</span>` : "";
-        html += `<div class="today-card ${status}">
+        const isConflict = conflicts[day] && conflicts[day][L.time];
+        const tags = [
+          (status === "now") ? `<span class="today-tag tag-now">сейчас</span>` : "",
+          isConflict ? `<span class="today-tag" style="background:#7f1d1d;color:#fca5a5;" title="Конфликт: ${escapeHtml(isConflict.join(' / '))}">⚠ конфликт</span>` : ""
+        ].join("");
+        html += `<div class="today-card ${status}${isConflict ? ' conflict-card' : ''}">
           <div class="today-time">${escapeHtml(L.time)}<small>урок ${L.lesson_no}</small></div>
           <div class="today-main">
             <div class="today-subj">${escapeHtml(L.subject || '—')}</div>
@@ -2343,13 +2494,13 @@ function renderMy() {
     }
   } else if (view === "week") {
     // Weekly grid: rows = lesson_no/time, columns = days
-    // Build time slots across all days
     const slots = [];
     for (const day of DAYS) {
       for (const L of week[day]) {
         let slot = slots.find(s => s.time === L.time);
         if (!slot) { slot = { time: L.time, byDay: {} }; slots.push(slot); }
-        slot.byDay[day] = L;
+        if (!slot.byDay[day]) slot.byDay[day] = [];
+        slot.byDay[day].push(L);
       }
     }
     slots.sort((a,b) => {
@@ -2361,17 +2512,27 @@ function renderMy() {
       html += `<div class="today-list"><div class="history-empty">На этой неделе у вас нет уроков 🎉</div></div>`;
     } else {
       html += `<div class="grid-wrap"><table class="schedule"><thead><tr><th>Время</th>`;
-      for (const day of DAYS) html += `<th class="cls-h">${day}</th>`;
+      for (const day of DAYS) {
+        const hasConflict = conflicts[day] && Object.values(conflicts[day]).length > 0;
+        html += `<th class="cls-h">${day}${hasConflict ? ' ⚠' : ''}</th>`;
+      }
       html += `</tr></thead><tbody>`;
       for (const slot of slots) {
         html += `<tr><td class="lesson-time">${escapeHtml(slot.time)}</td>`;
         for (const day of DAYS) {
-          const L = slot.byDay[day];
-          if (!L) { html += `<td></td>`; continue; }
-          html += `<td>
-            <div class="cell-subject ${subjectClass(L.subject || '')}">${escapeHtml(L.subject || '—')}${L.room ? `<span class="cell-room">${escapeHtml(L.room)}</span>` : ''}</div>
-            <div class="cell-teacher" style="font-size:10px;">${escapeHtml(L.dept)} · <span class="click-link" onclick="openClassCard('${L.dept}','${L.cls}')">${L.cls} кл</span></div>
-          </td>`;
+          const cells = slot.byDay[day];
+          if (!cells || cells.length === 0) { html += `<td></td>`; continue; }
+          const isConflict = conflicts[day] && conflicts[day][slot.time];
+          const bg = isConflict ? "background:rgba(127,29,29,.25);border:1px solid #f87171;" : "";
+          html += `<td style="${bg}">`;
+          for (const L of cells) {
+            html += `<div class="cell-subject ${subjectClass(L.subject || '')}" style="margin-bottom:${cells.length>1?'4px':'0'}">
+              ${escapeHtml(L.subject || '—')}${L.room ? `<span class="cell-room">${escapeHtml(L.room)}</span>` : ''}
+            </div>
+            <div class="cell-teacher" style="font-size:10px;">${escapeHtml(L.dept)} · <span class="click-link" onclick="openClassCard('${L.dept}','${L.cls}')">${L.cls} кл</span></div>`;
+          }
+          if (isConflict) html += `<div style="font-size:10px;color:#f87171;margin-top:2px;">⚠ конфликт</div>`;
+          html += `</td>`;
         }
         html += `</tr>`;
       }
