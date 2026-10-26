@@ -626,6 +626,296 @@ app.delete("/api/admin/users/:id", authMiddleware, requireHead, async (req, res)
   }
 });
 
+// ============================================================
+// SCHEDULE GENERATOR API
+// ============================================================
+
+// --- Кабинеты ---
+app.get("/api/rooms", authMiddleware, async (req, res) => {
+  const { dept } = req.query;
+  const params = dept ? [dept] : [];
+  const q = dept
+    ? "SELECT * FROM rooms WHERE dept=$1 ORDER BY name"
+    : "SELECT * FROM rooms ORDER BY dept, name";
+  const r = await db.query(q, params);
+  res.json({ rooms: r.rows });
+});
+
+app.post("/api/rooms", authMiddleware, requireHead, async (req, res) => {
+  const { dept, name, capacity, notes } = req.body || {};
+  if (!dept || !name) return res.status(400).json({ error: "bad_request" });
+  try {
+    const r = await db.query(
+      "INSERT INTO rooms (dept, name, capacity, notes) VALUES ($1,$2,$3,$4) ON CONFLICT (dept,name) DO UPDATE SET capacity=EXCLUDED.capacity, notes=EXCLUDED.notes RETURNING *",
+      [dept, name, capacity || 30, notes || null]
+    );
+    res.json({ room: r.rows[0] });
+  } catch (e) { res.status(500).json({ error: String(e.message) }); }
+});
+
+app.delete("/api/rooms/:id", authMiddleware, requireHead, async (req, res) => {
+  await db.query("DELETE FROM rooms WHERE id=$1", [req.params.id]);
+  res.json({ ok: true });
+});
+
+// --- Доступность учителей ---
+app.get("/api/availability", authMiddleware, async (req, res) => {
+  const { teacher_id, dept } = req.query;
+  let q = "SELECT a.*, u.name as teacher_name FROM teacher_availability a JOIN users u ON u.id=a.teacher_id WHERE 1=1";
+  const params = [];
+  if (teacher_id) { params.push(teacher_id); q += ` AND a.teacher_id=$${params.length}`; }
+  if (dept)       { params.push(dept);       q += ` AND (a.dept=$${params.length} OR a.dept IS NULL)`; }
+  q += " ORDER BY u.name, a.day_of_week, a.lesson_no";
+  const r = await db.query(q, params);
+  res.json({ availability: r.rows });
+});
+
+// Сохранить всю сетку доступности учителя (bulk upsert)
+// Body: { teacher_id, dept, slots: [{day_of_week, lesson_no, available, note}] }
+app.post("/api/availability", authMiddleware, async (req, res) => {
+  const u = await getUserById(req.userId);
+  const { teacher_id, dept, slots } = req.body || {};
+  if (!Array.isArray(slots)) return res.status(400).json({ error: "bad_request" });
+  // Teacher can only edit own availability; head can edit anyone's
+  const targetId = (u.role === "head" && teacher_id) ? parseInt(teacher_id) : req.userId;
+  if (u.role !== "head" && targetId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  const client = await db.pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Clear existing for this teacher+dept combination
+    const depParam = dept || null;
+    await client.query(
+      "DELETE FROM teacher_availability WHERE teacher_id=$1 AND (dept=$2 OR ($2::text IS NULL AND dept IS NULL))",
+      [targetId, depParam]
+    );
+    for (const s of slots) {
+      await client.query(
+        `INSERT INTO teacher_availability (teacher_id, dept, day_of_week, lesson_no, available, note)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [targetId, depParam, s.day_of_week, s.lesson_no, s.available ?? false, s.note || null]
+      );
+    }
+    await client.query("COMMIT");
+    res.json({ ok: true, saved: slots.length });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: String(e.message) });
+  } finally { client.release(); }
+});
+
+// --- Учебный план ---
+app.get("/api/curriculum", authMiddleware, async (req, res) => {
+  const { dept, cls } = req.query;
+  let q = "SELECT c.*, u.name as teacher_name FROM curriculum c LEFT JOIN users u ON u.id=c.teacher_id WHERE 1=1";
+  const params = [];
+  if (dept) { params.push(dept); q += ` AND c.dept=$${params.length}`; }
+  if (cls)  { params.push(cls);  q += ` AND c.cls=$${params.length}`; }
+  q += " ORDER BY c.cls, c.subject_type, c.subject";
+  const r = await db.query(q, params);
+  res.json({ curriculum: r.rows });
+});
+
+app.post("/api/curriculum", authMiddleware, requireHead, async (req, res) => {
+  const { dept, grade, cls, subject, hours_week, subject_type, teacher_id, notes } = req.body || {};
+  if (!dept || !cls || !subject || !hours_week) return res.status(400).json({ error: "bad_request" });
+  try {
+    const r = await db.query(
+      `INSERT INTO curriculum (dept, grade, cls, subject, hours_week, subject_type, teacher_id, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (dept, cls, subject)
+       DO UPDATE SET grade=EXCLUDED.grade, hours_week=EXCLUDED.hours_week,
+                     subject_type=EXCLUDED.subject_type, teacher_id=EXCLUDED.teacher_id, notes=EXCLUDED.notes
+       RETURNING *`,
+      [dept, grade || null, cls, subject, hours_week, subject_type || "main", teacher_id || null, notes || null]
+    );
+    res.json({ item: r.rows[0] });
+  } catch (e) { res.status(500).json({ error: String(e.message) }); }
+});
+
+app.delete("/api/curriculum/:id", authMiddleware, requireHead, async (req, res) => {
+  await db.query("DELETE FROM curriculum WHERE id=$1", [req.params.id]);
+  res.json({ ok: true });
+});
+
+// Импорт учебного плана из xlsx
+app.post("/api/curriculum/import", authMiddleware, requireHead, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "no_file" });
+  const dept = req.body.dept;
+  if (!dept) return res.status(400).json({ error: "no_dept" });
+  try {
+    const wb = xlsx.read(req.file.buffer, { type: "buffer" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = xlsx.utils.sheet_to_json(ws, { header: 1, defval: null });
+    // Expected: строка заголовка: Класс | Предмет | Часов | Тип | Учитель
+    const items = [];
+    let headerRow = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const rowStr = r.map(v => String(v||"").toLowerCase()).join("|");
+      if (rowStr.includes("класс") && rowStr.includes("предмет")) { headerRow = i; break; }
+    }
+    if (headerRow < 0) return res.status(400).json({ error: "header_not_found" });
+    const hdr = rows[headerRow].map(v => String(v||"").toLowerCase().trim());
+    const ci = (s) => hdr.findIndex(h => h.includes(s));
+    const iCls = ci("класс"); const iSubj = ci("предмет"); const iHrs = ci("час");
+    const iType = ci("тип"); const iTeacher = ci("учитель");
+    for (let i = headerRow + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const cls = row[iCls] != null ? String(row[iCls]).trim() : null;
+      const subject = row[iSubj] != null ? String(row[iSubj]).trim() : null;
+      const hrs = parseFloat(row[iHrs]);
+      if (!cls || !subject || isNaN(hrs)) continue;
+      const stype = iType >= 0 && row[iType] ? String(row[iType]).trim().toLowerCase() : "main";
+      const teacherName = iTeacher >= 0 && row[iTeacher] ? String(row[iTeacher]).trim() : null;
+      let teacher_id = null;
+      if (teacherName) {
+        const tu = await db.query("SELECT id FROM users WHERE name ILIKE $1 LIMIT 1", [teacherName]);
+        if (tu.rows[0]) teacher_id = tu.rows[0].id;
+      }
+      const gradeMatch = cls.match(/^(\d+)/);
+      items.push({ dept, grade: gradeMatch ? parseInt(gradeMatch[1]) : null, cls, subject, hours_week: hrs, subject_type: stype, teacher_id });
+    }
+    if (req.body.preview === "true") return res.json({ preview: items.slice(0, 50), total: items.length });
+    let saved = 0;
+    for (const it of items) {
+      await db.query(
+        `INSERT INTO curriculum (dept, grade, cls, subject, hours_week, subject_type, teacher_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (dept, cls, subject) DO UPDATE SET grade=EXCLUDED.grade, hours_week=EXCLUDED.hours_week,
+           subject_type=EXCLUDED.subject_type, teacher_id=EXCLUDED.teacher_id`,
+        [it.dept, it.grade, it.cls, it.subject, it.hours_week, it.subject_type, it.teacher_id]
+      );
+      saved++;
+    }
+    res.json({ ok: true, saved });
+  } catch (e) { res.status(500).json({ error: String(e.message) }); }
+});
+
+// --- Профильные группы ---
+app.get("/api/profile-groups", authMiddleware, async (req, res) => {
+  const { dept, cls } = req.query;
+  let q = "SELECT g.*, u.name as teacher_name FROM profile_groups g LEFT JOIN users u ON u.id=g.teacher_id WHERE 1=1";
+  const params = [];
+  if (dept) { params.push(dept); q += ` AND g.dept=$${params.length}`; }
+  if (cls)  { params.push(cls);  q += ` AND g.cls=$${params.length}`; }
+  q += " ORDER BY g.cls, g.group_name";
+  const r = await db.query(q, params);
+  res.json({ groups: r.rows });
+});
+
+app.post("/api/profile-groups", authMiddleware, requireHead, async (req, res) => {
+  const { dept, cls, group_name, group_code, subject, exam_type, teacher_id, notes } = req.body || {};
+  if (!dept || !cls || !group_name || !group_code) return res.status(400).json({ error: "bad_request" });
+  try {
+    const r = await db.query(
+      `INSERT INTO profile_groups (dept, cls, group_name, group_code, subject, exam_type, teacher_id, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [dept, cls, group_name, group_code, subject || null, exam_type || null, teacher_id || null, notes || null]
+    );
+    res.json({ group: r.rows[0] });
+  } catch (e) { res.status(500).json({ error: String(e.message) }); }
+});
+
+app.patch("/api/profile-groups/:id", authMiddleware, requireHead, async (req, res) => {
+  const { group_name, group_code, subject, exam_type, teacher_id, notes } = req.body || {};
+  const fields = [], vals = [];
+  if (group_name !== undefined) { fields.push(`group_name=$${fields.length+1}`); vals.push(group_name); }
+  if (group_code !== undefined) { fields.push(`group_code=$${fields.length+1}`); vals.push(group_code); }
+  if (subject    !== undefined) { fields.push(`subject=$${fields.length+1}`);    vals.push(subject); }
+  if (exam_type  !== undefined) { fields.push(`exam_type=$${fields.length+1}`);  vals.push(exam_type); }
+  if (teacher_id !== undefined) { fields.push(`teacher_id=$${fields.length+1}`); vals.push(teacher_id); }
+  if (notes      !== undefined) { fields.push(`notes=$${fields.length+1}`);      vals.push(notes); }
+  if (!fields.length) return res.json({ ok: true });
+  vals.push(req.params.id);
+  const r = await db.query(`UPDATE profile_groups SET ${fields.join(",")} WHERE id=$${vals.length} RETURNING *`, vals);
+  res.json({ group: r.rows[0] });
+});
+
+app.delete("/api/profile-groups/:id", authMiddleware, requireHead, async (req, res) => {
+  await db.query("DELETE FROM profile_groups WHERE id=$1", [req.params.id]);
+  res.json({ ok: true });
+});
+
+// --- Версии расписаний ---
+app.get("/api/schedule-versions", authMiddleware, async (req, res) => {
+  const { dept } = req.query;
+  const params = dept ? [dept] : [];
+  const q = dept
+    ? "SELECT v.*, u.name as created_by_name FROM schedule_versions v LEFT JOIN users u ON u.id=v.created_by WHERE v.dept=$1 ORDER BY v.created_at DESC"
+    : "SELECT v.*, u.name as created_by_name FROM schedule_versions v LEFT JOIN users u ON u.id=v.created_by ORDER BY v.created_at DESC";
+  const r = await db.query(q, params);
+  res.json({ versions: r.rows });
+});
+
+app.post("/api/schedule-versions", authMiddleware, requireHead, async (req, res) => {
+  const { dept, name, week_start, notes } = req.body || {};
+  if (!dept || !name) return res.status(400).json({ error: "bad_request" });
+  const r = await db.query(
+    "INSERT INTO schedule_versions (dept, name, week_start, status, created_by, notes) VALUES ($1,$2,$3,'draft',$4,$5) RETURNING *",
+    [dept, name, week_start || null, req.userId, notes || null]
+  );
+  res.json({ version: r.rows[0] });
+});
+
+app.patch("/api/schedule-versions/:id", authMiddleware, requireHead, async (req, res) => {
+  const { status, name, notes } = req.body || {};
+  const fields = [], vals = [];
+  if (status !== undefined) { fields.push(`status=$${fields.length+1}`); vals.push(status); }
+  if (name   !== undefined) { fields.push(`name=$${fields.length+1}`);   vals.push(name); }
+  if (notes  !== undefined) { fields.push(`notes=$${fields.length+1}`);  vals.push(notes); }
+  if (!fields.length) return res.json({ ok: true });
+  vals.push(req.params.id);
+  const r = await db.query(`UPDATE schedule_versions SET ${fields.join(",")} WHERE id=$${vals.length} RETURNING *`, vals);
+  res.json({ version: r.rows[0] });
+});
+
+// --- Слоты расписания (версии) ---
+app.get("/api/schedule-slots/:version_id", authMiddleware, async (req, res) => {
+  const r = await db.query(
+    `SELECT s.*, u.name as teacher_name, ro.name as room_name, g.group_name, g.group_code
+     FROM schedule_slots s
+     LEFT JOIN users u ON u.id=s.teacher_id
+     LEFT JOIN rooms ro ON ro.id=s.room_id
+     LEFT JOIN profile_groups g ON g.id=s.group_id
+     WHERE s.version_id=$1 ORDER BY s.day_of_week, s.lesson_no, s.cls`,
+    [req.params.version_id]
+  );
+  res.json({ slots: r.rows });
+});
+
+app.post("/api/schedule-slots/:version_id", authMiddleware, requireHead, async (req, res) => {
+  const slots = Array.isArray(req.body) ? req.body : [req.body];
+  const version_id = parseInt(req.params.version_id);
+  const client = await db.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const created = [];
+    for (const s of slots) {
+      const r = await client.query(
+        `INSERT INTO schedule_slots (version_id, dept, day_of_week, lesson_no, time_start, time_end, cls, subject, teacher_id, room_id, group_id, slot_type, is_double, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        [version_id, s.dept, s.day_of_week, s.lesson_no, s.time_start||null, s.time_end||null, s.cls, s.subject, s.teacher_id||null, s.room_id||null, s.group_id||null, s.slot_type||"main", s.is_double||false, s.notes||null]
+      );
+      created.push(r.rows[0]);
+    }
+    await client.query("COMMIT");
+    res.json({ created });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: String(e.message) });
+  } finally { client.release(); }
+});
+
+app.delete("/api/schedule-slots/:version_id/all", authMiddleware, requireHead, async (req, res) => {
+  await db.query("DELETE FROM schedule_slots WHERE version_id=$1", [req.params.version_id]);
+  res.json({ ok: true });
+});
+
+app.delete("/api/schedule-slots/slot/:id", authMiddleware, requireHead, async (req, res) => {
+  await db.query("DELETE FROM schedule_slots WHERE id=$1", [req.params.id]);
+  res.json({ ok: true });
+});
+
 // === Health ===
 app.get("/api/health", async (req, res) => {
   try {

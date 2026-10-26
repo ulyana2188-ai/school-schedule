@@ -128,3 +128,105 @@ CREATE TABLE IF NOT EXISTS schedule_edit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_schlog_dept_day ON schedule_edit_log(dept, day);
 CREATE INDEX IF NOT EXISTS idx_schlog_when ON schedule_edit_log(edited_at DESC);
+
+-- ============================================================
+-- SCHEDULE GENERATOR TABLES
+-- ============================================================
+
+-- Кабинеты (аудитории) по каждому филиалу
+CREATE TABLE IF NOT EXISTS rooms (
+  id          SERIAL PRIMARY KEY,
+  dept        TEXT NOT NULL,
+  name        TEXT NOT NULL,          -- "каб. 5", "спортзал", "актовый зал"
+  capacity    INT DEFAULT 30,
+  notes       TEXT,
+  created_at  TIMESTAMP DEFAULT NOW(),
+  UNIQUE(dept, name)
+);
+CREATE INDEX IF NOT EXISTS idx_rooms_dept ON rooms(dept);
+
+-- Доступность учителей (лист ожиданий)
+-- Каждая строка = один слот: учитель НЕ может работать в это время
+-- (отсутствие записи = учитель доступен)
+CREATE TABLE IF NOT EXISTS teacher_availability (
+  id          SERIAL PRIMARY KEY,
+  teacher_id  INT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  dept        TEXT,                   -- NULL = ограничение действует во всех филиалах
+  day_of_week TEXT NOT NULL CHECK (day_of_week IN ('Понедельник','Вторник','Среда','Четверг','Пятница')),
+  lesson_no   INT NOT NULL,           -- номер урока 0-9
+  available   BOOLEAN DEFAULT FALSE,  -- FALSE = недоступен, TRUE = предпочтительно
+  note        TEXT,
+  created_at  TIMESTAMP DEFAULT NOW(),
+  UNIQUE(teacher_id, dept, day_of_week, lesson_no)
+);
+CREATE INDEX IF NOT EXISTS idx_avail_teacher ON teacher_availability(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_avail_day ON teacher_availability(day_of_week);
+
+-- Учебный план (количество часов предмета в неделю для класса)
+CREATE TABLE IF NOT EXISTS curriculum (
+  id          SERIAL PRIMARY KEY,
+  dept        TEXT NOT NULL,
+  grade       INT NOT NULL,           -- 1-11
+  cls         TEXT NOT NULL,          -- "5", "6", "7а", "7б", "10ф", "11г" etc.
+  subject     TEXT NOT NULL,
+  hours_week  NUMERIC(4,1) NOT NULL,  -- может быть 1.5 (3 раза в 2 недели)
+  subject_type TEXT DEFAULT 'main'    -- 'main', 'oge', 'ege', 'elective', 'support', 'selfprep', 'extracurr'
+    CHECK (subject_type IN ('main','oge','ege','elective','support','selfprep','extracurr')),
+  teacher_id  INT REFERENCES users(id) ON DELETE SET NULL,
+  notes       TEXT,
+  created_at  TIMESTAMP DEFAULT NOW(),
+  UNIQUE(dept, cls, subject)
+);
+CREATE INDEX IF NOT EXISTS idx_curriculum_dept ON curriculum(dept, cls);
+
+-- Профильные группы (для 9, 10, 11 кл — ОГЭ/ЕГЭ группы)
+CREATE TABLE IF NOT EXISTS profile_groups (
+  id          SERIAL PRIMARY KEY,
+  dept        TEXT NOT NULL,
+  cls         TEXT NOT NULL,          -- "9", "10ф", "11г"
+  group_name  TEXT NOT NULL,          -- "ОГЭ история", "Физмат А", "Гуманитарный"
+  group_code  TEXT NOT NULL,          -- короткий код: "ист", "физ", "гум"
+  subject     TEXT,                   -- предмет подготовки
+  exam_type   TEXT CHECK (exam_type IN ('oge','ege')),
+  student_list TEXT[],                -- список имён/ID учеников (опционально)
+  teacher_id  INT REFERENCES users(id) ON DELETE SET NULL,
+  notes       TEXT,
+  created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pgroups_dept_cls ON profile_groups(dept, cls);
+
+-- Версии расписаний (генератор создаёт черновики — можно сравнивать)
+CREATE TABLE IF NOT EXISTS schedule_versions (
+  id          SERIAL PRIMARY KEY,
+  dept        TEXT NOT NULL,
+  name        TEXT NOT NULL,          -- "Неделя 23.09.2026 v1"
+  week_start  DATE,                   -- первый день недели
+  status      TEXT DEFAULT 'draft' CHECK (status IN ('draft','active','archived')),
+  created_by  INT REFERENCES users(id),
+  created_at  TIMESTAMP DEFAULT NOW(),
+  notes       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_schedver_dept ON schedule_versions(dept, status);
+
+-- Слоты сгенерированного расписания (привязаны к версии)
+CREATE TABLE IF NOT EXISTS schedule_slots (
+  id          SERIAL PRIMARY KEY,
+  version_id  INT REFERENCES schedule_versions(id) ON DELETE CASCADE NOT NULL,
+  dept        TEXT NOT NULL,
+  day_of_week TEXT NOT NULL,
+  lesson_no   INT NOT NULL,
+  time_start  TEXT,
+  time_end    TEXT,
+  cls         TEXT NOT NULL,
+  subject     TEXT NOT NULL,
+  teacher_id  INT REFERENCES users(id) ON DELETE SET NULL,
+  room_id     INT REFERENCES rooms(id) ON DELETE SET NULL,
+  group_id    INT REFERENCES profile_groups(id) ON DELETE SET NULL,
+  slot_type   TEXT DEFAULT 'main' CHECK (slot_type IN ('main','oge','ege','support','selfprep','walk','extracurr','start')),
+  is_double   BOOLEAN DEFAULT FALSE,  -- спаренный урок
+  notes       TEXT,
+  created_at  TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_slots_version ON schedule_slots(version_id, dept);
+CREATE INDEX IF NOT EXISTS idx_slots_teacher ON schedule_slots(teacher_id, day_of_week, lesson_no);
+CREATE INDEX IF NOT EXISTS idx_slots_cls ON schedule_slots(version_id, cls, day_of_week);
