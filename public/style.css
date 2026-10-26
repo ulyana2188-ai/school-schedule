@@ -526,31 +526,102 @@ body.edit-mode table.schedule td { position: relative; }
 }
 
 /* Mobile improvements */
+/* ======= MOBILE (≤768px) ======= */
 @media (max-width: 768px) {
-  table.schedule { font-size: 11px; }
-  .brand-name { font-size: 18px; }
-  .app { padding: 8px; }
-  .header { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
-  .brand { min-width: 0; }
-  .brand-name { font-size: 16px; }
-  .brand-sub { font-size: 10px; }
-  .logo { width: 40px; height: 40px; }
-  .header-actions { flex-wrap: wrap; gap: 6px; margin-left: 0; width: 100%; }
-  .user-chip { padding: 3px 8px 3px 3px; }
-  .user-name { font-size: 11px; }
-  .user-role { font-size: 9px; }
+  .app { padding: 6px; }
+
+  /* Header: logo + brand left, actions right */
+  .header {
+    padding: 8px 10px; gap: 8px;
+    border-radius: 10px; margin-bottom: 10px;
+    flex-wrap: nowrap;
+  }
+  .logo { width: 36px; height: 36px; flex-shrink: 0; }
+  .brand-name { font-size: 15px; }
+  .brand-sub { display: none; }
+  .header-actions {
+    margin-left: auto; flex-wrap: nowrap; gap: 4px;
+    align-items: center; flex-shrink: 0;
+  }
+  /* Hide "Замена" text on tiny screens, show icon only */
+  .header-actions .btn:first-child { font-size: 0; padding: 8px 10px; }
+  .header-actions .btn:first-child::before { content: "+"; font-size: 18px; }
+  .theme-toggle-btn { font-size: 14px; padding: 4px 6px; }
+  .user-name { display: none; }
+  .user-role { display: none; }
+  .user-chip { padding: 3px 6px 3px 3px; gap: 4px; }
+
+  /* Section nav: horizontal scroll, compact */
+  .section-nav {
+    gap: 5px; overflow-x: auto; padding-bottom: 4px;
+    flex-wrap: nowrap; scrollbar-width: none; margin-bottom: 8px;
+  }
+  .section-nav::-webkit-scrollbar { display: none; }
+  .section-btn {
+    padding: 7px 10px; font-size: 11px; font-weight: 600;
+    white-space: nowrap; flex-shrink: 0; gap: 4px; border-radius: 8px;
+  }
+  .section-count { padding: 1px 5px; font-size: 10px; }
+
+  /* Dept tabs */
+  .dept-tabs { padding: 3px; margin-bottom: 8px; }
+  .dept-tab { font-size: 12px; padding: 7px 10px; min-width: 80px; }
+
+  /* Toolbar: two rows on mobile */
+  .toolbar {
+    flex-wrap: wrap; padding: 8px; gap: 6px; border-radius: 8px;
+  }
+  /* Day tabs row — full width, scrollable */
+  #dayTabs {
+    order: 0; width: 100%; overflow-x: auto; flex-wrap: nowrap;
+    scrollbar-width: none; gap: 4px;
+  }
+  #dayTabs::-webkit-scrollbar { display: none; }
+  .day-tab { font-size: 11px; padding: 5px 10px; white-space: nowrap; flex-shrink: 0; }
+  /* Class filter row */
+  #classFilter { font-size: 12px; }
+  /* Search */
+  .schedule-search-wrap input { width: 130px; font-size: 11px; }
+  /* View switch + print/pdf: shrink */
+  .view-switch button { font-size: 11px; padding: 4px 8px; }
+  .toolbar .spacer { display: none; }
+  /* Buttons */
+  .toolbar .btn.secondary { font-size: 11px; padding: 5px 8px; }
+
+  /* Grid */
+  .grid-wrap { max-height: calc(100vh - 260px); border-radius: 8px; }
+  table.schedule { font-size: 10px; }
+  table.schedule thead th { padding: 6px 4px; font-size: 11px; }
+  table.schedule td { padding: 3px 4px; }
+  table.schedule td.lesson-time { width: 64px; font-size: 9px; }
+  table.schedule td.lesson-no { width: 28px; font-size: 10px; }
+  .cell-subject { font-size: 10px; }
+  .cell-teacher { font-size: 9px; }
+
+  /* Stats */
   .stats-row { flex-wrap: wrap; }
   .stat-card { flex: 1 0 calc(50% - 6px); min-width: 0; }
-  .dept-tab { font-size: 12px; padding: 8px 10px; min-width: 90px; }
-  .day-tab { font-size: 11px; padding: 5px 8px; }
-  .section-btn { padding: 7px 12px; font-size: 12px; }
-  .modal { padding: 14px; width: 95%; }
-  .grid-wrap { max-height: calc(100vh - 280px); }
-  table.schedule td { padding: 4px 5px; }
-  .cell-subject { font-size: 11px; }
-  .cell-teacher { font-size: 10px; }
+
+  /* Modal */
+  .modal { padding: 14px; width: 98%; border-radius: 12px; max-height: 90vh; }
+
+  /* Generator */
   .gen-tabs { overflow-x: auto; flex-wrap: nowrap !important; }
   .gen-tab-btn { white-space: nowrap; font-size: 11px; padding: 6px 10px; }
+
+  /* Inbox and user menu: full-width on tiny screens */
+  .inbox { width: min(340px, 95vw); right: -60px; }
+  .user-menu { width: min(280px, 95vw); right: 0; }
+}
+
+/* Extra small (≤400px) */
+@media (max-width: 400px) {
+  .app { padding: 4px; }
+  .header { padding: 6px 8px; }
+  .section-btn { padding: 6px 8px; font-size: 10px; }
+  .toolbar { padding: 6px; }
+  table.schedule { font-size: 9px; }
+  table.schedule td.lesson-time { width: 54px; }
 }
 
 /* ============= GENERATOR STYLES ============= */

@@ -532,6 +532,7 @@ function renderGrid() {
   }
   content += `</div>`;
   document.getElementById("mainContent").innerHTML = content;
+  if (EDIT_MODE) setTimeout(_initTouchDrag, 50);
 }
 function renderWeek() {
   const dept = DATA[state.dept];
@@ -2408,6 +2409,114 @@ function infoToEditPayload(info) {
   if (!info) return { subject: null, teacher: null, room: null, groups: null, cleared: false };
   if (info.groups) return { groups: info.groups, subject: null, teacher: null, room: info.room || null, cleared: false };
   return { subject: info.subject || null, teacher: info.teacher || null, room: info.room || null, groups: null, cleared: false };
+}
+
+// ============= TOUCH DRAG & DROP (mobile support) =============
+let _touchDragSrc = null;
+let _touchGhost = null;
+let _touchLastTarget = null;
+
+function _initTouchDrag() {
+  // Attach touch listeners to all draggable cells after grid render
+  document.querySelectorAll('td[draggable="true"][data-cell]').forEach(td => {
+    td.addEventListener("touchstart", _onTouchDragStart, { passive: false });
+  });
+}
+
+function _createGhost(td) {
+  const ghost = td.cloneNode(true);
+  ghost.style.cssText = `position:fixed;z-index:9999;opacity:.85;pointer-events:none;
+    width:${td.offsetWidth}px;border:2px solid var(--ip-cyan);border-radius:6px;
+    background:white;box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:10px;padding:4px;`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function _cellFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return el ? el.closest('td[data-cell]') : null;
+}
+
+function _onTouchDragStart(e) {
+  if (!EDIT_MODE) return;
+  const td = e.currentTarget;
+  const key = td.dataset.cell;
+  if (!key) return;
+  const src = parseCellKey(key);
+  const info = getCellInfo(src.dept, src.day, src.lkey, src.cls);
+  if (!info) return;
+
+  e.preventDefault();
+  _touchDragSrc = { ...src, info, td };
+  td.classList.add("dragging");
+  _touchGhost = _createGhost(td);
+
+  const touch = e.touches[0];
+  _moveGhost(touch.clientX, touch.clientY);
+
+  td.addEventListener("touchmove", _onTouchDragMove, { passive: false });
+  td.addEventListener("touchend",  _onTouchDragEnd, { passive: false });
+  td.addEventListener("touchcancel", _onTouchDragEnd, { passive: false });
+}
+
+function _moveGhost(x, y) {
+  if (!_touchGhost) return;
+  _touchGhost.style.left = (x - _touchGhost.offsetWidth / 2) + "px";
+  _touchGhost.style.top  = (y - _touchGhost.offsetHeight / 2) + "px";
+}
+
+function _onTouchDragMove(e) {
+  e.preventDefault();
+  const touch = e.touches[0];
+  _moveGhost(touch.clientX, touch.clientY);
+
+  // Highlight target cell
+  if (_touchGhost) _touchGhost.style.display = "none";
+  const over = _cellFromPoint(touch.clientX, touch.clientY);
+  if (_touchGhost) _touchGhost.style.display = "";
+
+  if (_touchLastTarget && _touchLastTarget !== over) {
+    _touchLastTarget.classList.remove("drop-target", "drop-target-swap");
+  }
+  if (over && over !== _touchDragSrc.td) {
+    const tgt = parseCellKey(over.dataset.cell);
+    if (tgt.dept === _touchDragSrc.dept) {
+      const tgtInfo = getCellInfo(tgt.dept, tgt.day, tgt.lkey, tgt.cls);
+      over.classList.add(tgtInfo ? "drop-target-swap" : "drop-target");
+      _touchLastTarget = over;
+    }
+  }
+}
+
+function _onTouchDragEnd(e) {
+  const touch = (e.changedTouches || e.touches)[0];
+
+  // Clean ghost
+  if (_touchGhost) { _touchGhost.remove(); _touchGhost = null; }
+  if (_touchLastTarget) { _touchLastTarget.classList.remove("drop-target", "drop-target-swap"); _touchLastTarget = null; }
+  if (_touchDragSrc) _touchDragSrc.td.classList.remove("dragging");
+
+  if (!_touchDragSrc || !touch) { _touchDragSrc = null; return; }
+
+  // Find drop target
+  if (_touchGhost) _touchGhost.style.display = "none";
+  const over = _cellFromPoint(touch.clientX, touch.clientY);
+
+  const srcTd = _touchDragSrc.td;
+  if (over && over.dataset.cell && over !== srcTd) {
+    // Simulate drop by re-using mouse drop logic
+    _dragSrc = _touchDragSrc;
+    const fakeEvent = {
+      preventDefault: () => {},
+      currentTarget: over
+    };
+    onCellDrop(fakeEvent);
+    _dragSrc = null;
+  }
+  _touchDragSrc = null;
+  srcTd.removeEventListener("touchmove", _onTouchDragMove);
+  srcTd.removeEventListener("touchend", _onTouchDragEnd);
+  srcTd.removeEventListener("touchcancel", _onTouchDragEnd);
 }
 
 async function onCellDrop(e) {

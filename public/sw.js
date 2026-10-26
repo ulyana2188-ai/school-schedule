@@ -1,5 +1,8 @@
 // Service Worker for Интеллект-плюс PWA
-const CACHE_NAME = "ip-schedule-v1";
+const CACHE_VER = "v4";
+const STATIC_CACHE  = `ip-static-${CACHE_VER}`;
+const API_CACHE     = `ip-api-${CACHE_VER}`;
+
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -8,43 +11,81 @@ const STATIC_ASSETS = [
   "/manifest.json",
 ];
 
-// Install: cache static assets
+// API routes to cache (stale-while-revalidate)
+// Only safe GET endpoints that don't carry sensitive tokens in the path
+const API_CACHE_PATHS = [
+  "/api/schedule",
+];
+
+// Install: pre-cache static assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
+    caches.open(STATIC_CACHE)
+      .then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: remove old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((k) => k !== STATIC_CACHE && k !== API_CACHE)
+          .map((k) => caches.delete(k))
+      )
     )
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch handler
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  // Only handle GET
+  if (event.request.method !== "GET") return;
+
+  // API: stale-while-revalidate for whitelisted paths, skip others
   if (url.pathname.startsWith("/api/")) {
-    // API: network only
+    const shouldCache = API_CACHE_PATHS.some(p => url.pathname === p || url.pathname.startsWith(p + "?"));
+    if (shouldCache) {
+      event.respondWith(staleWhileRevalidate(event.request, API_CACHE));
+    }
+    // Other API calls: pass through (no cache)
     return;
   }
+
+  // Static assets: network-first with cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
         if (response.ok) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+          caches.open(STATIC_CACHE).then((c) => c.put(event.request, clone));
         }
         return response;
       })
       .catch(() => caches.match(event.request))
   );
 });
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+
+  // Start network fetch in background regardless
+  const fetchPromise = fetch(request).then((response) => {
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  }).catch(() => null);
+
+  // Return cached immediately if available, otherwise wait for network
+  return cached || fetchPromise;
+}
 
 // Push notification handler
 self.addEventListener("push", (event) => {
