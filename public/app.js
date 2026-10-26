@@ -1202,6 +1202,15 @@ function initUI() {
   // Absence requests — teachers see it as "Мой больничный", heads see all
   const absReqTab = document.getElementById("absReqTab");
   if (absReqTab) absReqTab.style.display = "";
+
+  // Hide head-only tabs from teachers
+  if (CURRENT_USER && CURRENT_USER.role === "teacher") {
+    const absTab = document.getElementById("absencesTab");
+    if (absTab) absTab.style.display = "none";
+    const histTab2 = document.getElementById("historyTab");
+    if (histTab2) histTab2.style.display = "none";
+  }
+
   setSection("today"); // default
   renderUserChip();
   renderBell();
@@ -1371,6 +1380,25 @@ function renderToday() {
             <div class="today-meta">${escapeHtml(L.dept)} · <a class="click-link" onclick="openClassCard('${L.dept}','${L.cls}')">${L.cls} класс</a>${L.room ? ' · каб ' + escapeHtml(L.room) : ''}</div>
           </div>
           <div class="today-tags">${tags.join("")}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    // My replacements today
+    const myReplacementsToday = ALL_REPLACEMENTS.filter(r =>
+      r.replacement_name === u.name && r.day === today
+    );
+    if (myReplacementsToday.length > 0) {
+      html += `<div style="font-size:13px;font-weight:600;margin:16px 4px 8px;">🔄 Ваши замены сегодня</div>`;
+      html += `<div class="today-list">`;
+      for (const r of myReplacementsToday) {
+        html += `<div class="today-card future" style="border-left:3px solid #f59e0b;">
+          <div class="today-time"><small>урок ${r.lesson_no}</small></div>
+          <div class="today-main">
+            <div class="today-subj">${escapeHtml(r.subject || '—')}</div>
+            <div class="today-meta">${escapeHtml(r.dept)} · ${escapeHtml(r.cls || '')} класс · вместо <span class="click-link" onclick="openTeacherCard('${escapeHtml(r.absent_name)}')">${escapeHtml(r.absent_name)}</span></div>
+          </div>
         </div>`;
       }
       html += `</div>`;
@@ -1829,9 +1857,41 @@ function openTeacherCard(name) {
     <div class="stat-card"><div class="label">Отделений</div><div class="value">${Object.keys(info.hoursByDept).length}</div></div>
   </div>`;
 
+  // Find colleagues who teach same subjects
+  const mySubjects = new Set(subjEntries.map(([s]) => s));
+  const colleagues = {};
+  for (const [tname, tinfo] of Object.entries(ALL_TEACHERS)) {
+    if (tname === name) continue;
+    for (const subj of Object.keys(tinfo.subjectHours || {})) {
+      if (mySubjects.has(subj)) {
+        if (!colleagues[subj]) colleagues[subj] = [];
+        colleagues[subj].push(tname);
+      }
+    }
+  }
+
   html += `<div style="margin-bottom:12px;"><div style="font-size:11px;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:6px;">Предметы и часы</div>
-    <div class="subj-chips">${subjEntries.map(([s,h]) => `<span class="subj-chip"><span class="subj-chip-name">${escapeHtml(s)}</span><span class="subj-chip-hours">${h}ч</span></span>`).join("")}</div>
+    <div class="subj-chips">${subjEntries.map(([s,h]) => {
+      const colleagueList = colleagues[s] || [];
+      const ctip = colleagueList.length > 0 ? ` title="Также ведут: ${colleagueList.join(', ')}"` : '';
+      return `<span class="subj-chip"${ctip}><span class="subj-chip-name">${escapeHtml(s)}</span><span class="subj-chip-hours">${h}ч</span>${colleagueList.length > 0 ? `<span style="font-size:10px;color:var(--text-muted);margin-left:3px;">+${colleagueList.length}</span>` : ''}</span>`;
+    }).join("")}</div>
   </div>`;
+
+  // Colleagues section
+  if (Object.keys(colleagues).length > 0) {
+    const allColleagues = [...new Set(Object.values(colleagues).flat())];
+    html += `<div style="margin-bottom:14px;"><div style="font-size:11px;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:6px;">Коллеги по предметам</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+    for (const cname of allColleagues) {
+      const sharedSubjs = Object.entries(colleagues).filter(([,cs]) => cs.includes(cname)).map(([s]) => s).join(', ');
+      html += `<span class="subj-chip click-link" onclick="document.getElementById('teacherCardModal').classList.remove('show'); openTeacherCard('${escapeHtml(cname).replace(/'/g,"\\'")}');" title="${escapeHtml(sharedSubjs)}">
+        <span class="teacher-avatar ${avatarColor(cname)}" style="width:20px;height:20px;font-size:9px;display:inline-flex;align-items:center;justify-content:center;">${getInitials(cname)}</span>
+        <span class="subj-chip-name" style="margin-left:4px;">${escapeHtml(cname)}</span>
+      </span>`;
+    }
+    html += `</div></div>`;
+  }
 
   // Build lookup: lesson_no → time string (from LESSON_TIMES)
   const ltMap = {};
@@ -2700,11 +2760,13 @@ function renderMy() {
   }
 
   // View switch
+  const myRepCount = ALL_REPLACEMENTS.filter(r => r.replacement_name === u.name).length;
   html += `<div class="toolbar" style="margin-bottom:10px;">
     <div class="view-switch">
       <button class="${view==='today'?'active':''}" onclick="setMyView('today')">Сегодня</button>
       <button class="${view==='day'?'active':''}" onclick="setMyView('day')">День</button>
       <button class="${view==='week'?'active':''}" onclick="setMyView('week')">Неделя</button>
+      <button class="${view==='myrep'?'active':''}" onclick="setMyView('myrep')">🔄 Мои замены${myRepCount > 0 ? ` <span style="background:var(--accent);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;">${myRepCount}</span>` : ''}</button>
     </div>`;
   if (view === "day") {
     html += `<div style="display:flex; align-items:center; gap: 6px; margin-left: 12px;">
@@ -2775,7 +2837,7 @@ function renderMy() {
           html += `<td style="${bg}">`;
           for (const L of cells) {
             html += `<div class="cell-subject ${subjectClass(L.subject || '')}" style="margin-bottom:${cells.length>1?'4px':'0'}">
-              ${escapeHtml(L.subject || '—')}${L.room ? `<span class="cell-room">${escapeHtml(L.room)}</span>` : ''}
+              ${escapeHtml(L.subject || '—')}${L.room ? `<span class="cell-room click-link" title="Открыть расписание кабинета" onclick="openRoomCard('${escapeHtml(L.room)}')">${escapeHtml(L.room)}</span>` : ''}
             </div>
             <div class="cell-teacher" style="font-size:10px;">${escapeHtml(L.dept)} · <span class="click-link" onclick="openClassCard('${L.dept}','${L.cls}')">${L.cls} кл</span></div>`;
           }
@@ -2785,6 +2847,23 @@ function renderMy() {
         html += `</tr>`;
       }
       html += `</tbody></table></div>`;
+    }
+  } else if (view === "myrep") {
+    const myReps = ALL_REPLACEMENTS.filter(r => r.replacement_name === u.name);
+    if (myReps.length === 0) {
+      html += `<div class="today-list"><div class="history-empty">У вас ещё нет замен 🎉</div></div>`;
+    } else {
+      html += `<div style="font-size:13px;color:var(--text-muted);margin:6px 4px 10px;">Всего замен: <b>${myReps.length}</b></div>`;
+      html += `<div class="history-list">`;
+      for (const r of myReps) {
+        html += `<div class="history-item">
+          <div class="history-date">${new Date(r.created_at).toLocaleDateString("ru-RU")}</div>
+          <div><b>${escapeHtml(r.day)}</b> · урок ${r.lesson_no}</div>
+          <div>${escapeHtml(r.dept)} ${escapeHtml(r.cls || '')} кл · ${escapeHtml(r.subject || '')}</div>
+          <div>Вместо: <span class="click-link" onclick="openTeacherCard('${escapeHtml(r.absent_name)}')">${escapeHtml(r.absent_name)}</span></div>
+        </div>`;
+      }
+      html += `</div>`;
     }
   }
   root.innerHTML = html;
@@ -2815,6 +2894,58 @@ function printMy() {
     const h = root.querySelector(".print-header");
     if (h) h.remove();
   }, 500);
+}
+
+// ============= ROOM CARD =============
+function openRoomCard(room) {
+  if (!room) return;
+  // Collect all lessons in this room across all depts/days
+  const entries = [];
+  for (const dept of DEPTS) {
+    if (!DATA[dept]) continue;
+    for (const day of DAYS) {
+      const sched = DATA[dept].schedule[day] || {};
+      for (const [lkey, ld] of Object.entries(sched)) {
+        for (const [cls, info] of Object.entries(ld.classes || {})) {
+          if ((info.room || '') === room) {
+            entries.push({ dept, day, cls, lkey, lesson_no: ld.lesson_no, time: ld.time, subject: info.subject, teacher: info.teacher });
+          }
+          // check groups
+          for (const [grp, gi] of Object.entries(info.groups || {})) {
+            if ((gi.room || '') === room) {
+              entries.push({ dept, day, cls, grp, lkey, lesson_no: ld.lesson_no, time: ld.time, subject: gi.subject, teacher: gi.teacher });
+            }
+          }
+        }
+      }
+    }
+  }
+  // Group by day
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <h3 style="margin:0;">📍 Кабинет ${escapeHtml(room)}</h3>
+    <button class="link-btn" onclick="document.getElementById('teacherCardModal').classList.remove('show')" style="font-size:14px;">✕</button>
+  </div>`;
+  if (entries.length === 0) {
+    html += `<div class="history-empty">В этом кабинете нет уроков в расписании.</div>`;
+  } else {
+    for (const day of DAYS) {
+      const dayEntries = entries.filter(e => e.day === day);
+      if (!dayEntries.length) continue;
+      dayEntries.sort((a,b) => (a.lesson_no||0) - (b.lesson_no||0));
+      html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);"><div style="font-weight:600;margin-bottom:4px;">${day}</div>`;
+      for (const e of dayEntries) {
+        html += `<div style="display:flex;gap:10px;align-items:center;font-size:12px;padding:3px 0;">
+          <span style="min-width:90px;color:var(--ip-blue);font-weight:500;">${escapeHtml(e.time||'')}</span>
+          <span style="font-weight:600;">${escapeHtml(e.subject||'—')}</span>
+          <span style="color:var(--text-muted);">${escapeHtml(e.dept)} · ${escapeHtml(e.cls)} кл${e.grp ? ' · гр. ' + escapeHtml(e.grp) : ''}</span>
+          ${e.teacher ? `<span class="click-link" onclick="document.getElementById('teacherCardModal').classList.remove('show'); openTeacherCard('${escapeHtml(e.teacher).replace(/'/g,"\\'")}')">👤 ${escapeHtml(e.teacher)}</span>` : ''}
+        </div>`;
+      }
+      html += `</div>`;
+    }
+  }
+  document.getElementById("teacherCardBody").innerHTML = html;
+  document.getElementById("teacherCardModal").classList.add("show");
 }
 
 // ============= EMAIL UTILS =============
@@ -5248,7 +5379,7 @@ async function renderAvailability() {
 
   root.innerHTML = `
     <div style="padding:16px;">
-      <h2 style="margin:0 0 4px;font-size:1.2rem;">🗓 Доступность для замен</h2>
+      <h2 style="margin:0 0 4px;font-size:1.2rem;">🗓 Моя доступность</h2>
       <p style="margin:0 0 16px;color:#888;font-size:13px;">Отметьте слоты, когда учитель <strong>НЕ доступен</strong> для замены. Зелёный = доступен, красный = не доступен.</p>
 
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
