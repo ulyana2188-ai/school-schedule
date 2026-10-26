@@ -736,7 +736,8 @@ function renderUserChip() {
 function renderUserMenu() {
   const u = CURRENT_USER;
   if (!u) return;
-  const hasLessons = ALL_TEACHERS[u.name] && ALL_TEACHERS[u.name].total > 0;
+  const _umSchedName = u.schedule_name || u.name;
+  const hasLessons = ALL_TEACHERS[_umSchedName] && ALL_TEACHERS[_umSchedName].total > 0;
   const dpts = (u.depts && u.depts.length > 0) ? u.depts.join(", ") : (u.dept || "");
   const roleLabel = `${getUserTitle(u)}${dpts ? " · " + dpts : ""}`;
   document.getElementById("userMenuList").innerHTML = `
@@ -755,6 +756,15 @@ function renderUserMenu() {
         <button onclick="saveFirstName()" class="btn" style="padding:5px 10px;font-size:12px;">Сохранить</button>
       </div>
     </div>
+    ${u.role === 'head' ? `<div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Моё ФИО в расписании</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Укажите точно так, как в расписании — чтобы видеть свои уроки</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input id="scheduleNameInput" type="text" placeholder="Например: Иванова И.И." value="${escapeHtml(u.schedule_name || '')}"
+          style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">
+        <button onclick="saveScheduleName()" class="btn" style="padding:5px 10px;font-size:12px;">Сохранить</button>
+      </div>
+    </div>` : ''}
     <div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
       <button id="pushToggleBtn" onclick="togglePushNotifications()" class="link-btn" style="font-size:12px;display:none;">🔔 Включить уведомления</button>
     </div>
@@ -778,6 +788,30 @@ async function saveFirstName() {
     if (r?.user) {
       CURRENT_USER.first_name = r.user.first_name;
       btn.textContent = "✓";
+      setTimeout(() => { btn.textContent = "Сохранить"; btn.disabled = false; }, 1500);
+    }
+  } catch(e) {
+    btn.disabled = false;
+    alert("Ошибка сохранения");
+  }
+}
+
+async function saveScheduleName() {
+  const input = document.getElementById("scheduleNameInput");
+  if (!input) return;
+  const val = input.value.trim();
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  try {
+    const r = await API.updateMe({ schedule_name: val });
+    if (r?.user) {
+      CURRENT_USER.schedule_name = r.user.schedule_name;
+      btn.textContent = "✓";
+      // Refresh today and my schedule sections
+      renderToday();
+      const _sn = CURRENT_USER.schedule_name || CURRENT_USER.name;
+      const myTab = document.getElementById("myTab");
+      if (myTab) myTab.style.display = (ALL_TEACHERS[_sn] && ALL_TEACHERS[_sn].total > 0) ? "" : "none";
       setTimeout(() => { btn.textContent = "Сохранить"; btn.disabled = false; }, 1500);
     }
   } catch(e) {
@@ -1229,7 +1263,8 @@ function initUI() {
   }
   // Show "Моё расписание" if user has any teaching hours (teachers + heads who also teach)
   const myTab = document.getElementById("myTab");
-  const hasLessons = CURRENT_USER && ALL_TEACHERS[CURRENT_USER.name] && ALL_TEACHERS[CURRENT_USER.name].total > 0;
+  const _schedName = CURRENT_USER && (CURRENT_USER.schedule_name || CURRENT_USER.name);
+  const hasLessons = CURRENT_USER && ALL_TEACHERS[_schedName] && ALL_TEACHERS[_schedName].total > 0;
   myTab.style.display = hasLessons ? "" : "none";
   // Chat tab — always visible
   const chatTab = document.getElementById("chatTab");
@@ -1254,6 +1289,18 @@ function initUI() {
     if (availTab) availTab.style.display = "none";
   }
 
+  // Also hide availability tab for heads — it's teacher-specific
+  if (CURRENT_USER && CURRENT_USER.role === "head") {
+    const availTabHead = document.getElementById("availabilityTab");
+    if (availTabHead) availTabHead.style.display = "none";
+    // Show tab customizer button for heads (many tabs)
+    const tcBtn = document.getElementById("tabCustomizeBtn");
+    if (tcBtn) tcBtn.style.display = "";
+  }
+
+  // Apply saved tab visibility preferences
+  applyTabVisibilityPrefs();
+
   setSection("today"); // default
   renderUserChip();
   renderBell();
@@ -1261,6 +1308,83 @@ function initUI() {
   startChatUnreadPoll();
   // Register service worker + push
   initPWA();
+}
+
+// ============= TAB CUSTOMIZER =============
+// Tabs that heads can toggle (section id → label)
+const HEAD_CUSTOMIZABLE_TABS = {
+  schedule:    "📅 Расписание",
+  teachers:    "👤 Учителя",
+  acsup:       "📚 Академическая поддержка",
+  absences:    "🏖 Отсутствия",
+  history:     "🔄 История замен",
+  schedhist:   "📋 Версии расписания",
+  generator:   "🤖 Генератор замен",
+  admin:       "⚙️ Сотрудники",
+  absreq:      "🤒 Больничный",
+  chat:        "💬 Чат",
+  stats:       "📊 Статистика",
+};
+
+function getHiddenTabs() {
+  try { return JSON.parse(localStorage.getItem("ip_hidden_tabs") || "[]"); } catch(e) { return []; }
+}
+function saveHiddenTabs(arr) {
+  try { localStorage.setItem("ip_hidden_tabs", JSON.stringify(arr)); } catch(e) {}
+}
+
+function applyTabVisibilityPrefs() {
+  if (!CURRENT_USER || CURRENT_USER.role !== "head") return;
+  const hidden = getHiddenTabs();
+  for (const sect of Object.keys(HEAD_CUSTOMIZABLE_TABS)) {
+    const el = document.querySelector(`.section-btn[data-section="${sect}"]`);
+    if (!el) continue;
+    // Only hide if the tab is currently shown (don't override role-based hiding)
+    if (hidden.includes(sect) && el.style.display !== "none") {
+      el.style.display = "none";
+      el.dataset.hiddenByPref = "1";
+    } else if (!hidden.includes(sect) && el.dataset.hiddenByPref === "1") {
+      el.style.display = "";
+      delete el.dataset.hiddenByPref;
+    }
+  }
+}
+
+function openTabCustomizer() {
+  if (!CURRENT_USER || CURRENT_USER.role !== "head") return;
+  const hidden = getHiddenTabs();
+  let html = "";
+  for (const [sect, label] of Object.entries(HEAD_CUSTOMIZABLE_TABS)) {
+    const checked = !hidden.includes(sect);
+    html += `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0;">
+      <input type="checkbox" ${checked ? "checked" : ""} onchange="toggleTabPref('${sect}',this.checked)"
+        style="width:16px;height:16px;cursor:pointer;">
+      <span style="font-size:13px;">${label}</span>
+    </label>`;
+  }
+  document.getElementById("tabCustomizerList").innerHTML = html;
+  document.getElementById("tabCustomizerModal").classList.add("show");
+}
+
+function toggleTabPref(sect, show) {
+  const hidden = getHiddenTabs();
+  if (show) {
+    const idx = hidden.indexOf(sect);
+    if (idx !== -1) hidden.splice(idx, 1);
+  } else {
+    if (!hidden.includes(sect)) hidden.push(sect);
+    // If currently on that section, go to today
+    if (state.section === sect) setSection("today");
+  }
+  saveHiddenTabs(hidden);
+  applyTabVisibilityPrefs();
+}
+
+function resetTabVisibility() {
+  saveHiddenTabs([]);
+  applyTabVisibilityPrefs();
+  // Re-check all checkboxes
+  document.querySelectorAll("#tabCustomizerList input[type=checkbox]").forEach(cb => cb.checked = true);
 }
 
 // ============= PWA + PUSH =============
@@ -1402,14 +1526,17 @@ function renderToday() {
 
   const _greetHour = new Date().getHours();
   const _greetWord = _greetHour < 12 ? "Доброе утро" : _greetHour < 17 ? "Добрый день" : "Добрый вечер";
-  const _firstName = escapeHtml(u.first_name || (u.name || '').split(' ')[0] || u.name);
+  // Use first_name if set; for heads without first_name, skip surname (it's just a role name)
+  const _rawFirst = u.first_name || (u.role !== 'head' ? (u.name || '').split(' ')[0] : null) || u.name;
+  const _firstName = escapeHtml(_rawFirst);
   let html = `<div class="today-greeting">
     <h2>${_greetWord}, ${_firstName}!</h2>
     <div class="day-of-week">Сегодня ${escapeHtml(dateStr)}</div>
   </div>`;
 
-  if (u.role === "teacher") {
-    const lessons = findUserLessonsToday(u.name, today);
+  const _mySchedName = u.schedule_name || u.name;
+  if (u.role === "teacher" || (u.role === "head" && ALL_TEACHERS[_mySchedName])) {
+    const lessons = findUserLessonsToday(_mySchedName, today);
     if (lessons.length === 0) {
       html += `<div class="today-list"><div class="history-empty">Сегодня у вас нет уроков 🎉</div></div>`;
     } else {
@@ -1462,8 +1589,9 @@ function renderToday() {
       <div class="stat-card magenta"><div class="label">Замен в системе</div><div class="value">${ALL_REPLACEMENTS.length}</div></div>
       <div class="stat-card"><div class="label">Конфликтов</div><div class="value">${CONFLICTS.length}</div></div>
     </div>`;
-    // Recent replacements
-    const recent = ALL_REPLACEMENTS.slice(0, 5);
+    // Recent replacements — only last 14 days
+    const _cutoff14 = new Date(); _cutoff14.setDate(_cutoff14.getDate() - 14);
+    const recent = ALL_REPLACEMENTS.filter(r => new Date(r.created_at) >= _cutoff14).slice(0, 8);
     if (recent.length) {
       html += `<div style="font-size:13px;font-weight:600;margin:14px 4px 8px;">Последние замены</div><div class="history-list">`;
       for (const r of recent) {
@@ -1476,6 +1604,8 @@ function renderToday() {
         </div>`;
       }
       html += `</div>`;
+    } else {
+      html += `<div style="font-size:13px;color:var(--text-muted);margin:14px 4px 4px;">Замен за последние 14 дней нет 🎉</div>`;
     }
   }
   root.innerHTML = html;
@@ -1542,8 +1672,8 @@ function renderAdmin() {
   if (CURRENT_USER.role !== "head") { root.innerHTML = `<div class="history-empty">Раздел доступен только завучам</div>`; return; }
 
   const myDepts = getMyAllowedDepts();
-  const active = ACCOUNTS.filter(a => a.is_active !== false);
-  const archived = ACCOUNTS.filter(a => a.is_active === false);
+  const active = ACCOUNTS.filter(a => a.is_active !== false && a.is_active !== "false" && a.is_active !== 0);
+  const archived = ACCOUNTS.filter(a => a.is_active === false || a.is_active === "false" || a.is_active === 0);
   const shown = _adminShowArchived ? archived : active;
 
   let html = `<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
@@ -2751,9 +2881,14 @@ function renderMy() {
   const u = CURRENT_USER;
   if (!u) return;
 
-  const hasLessons = ALL_TEACHERS[u.name] && ALL_TEACHERS[u.name].total > 0;
+  const _schedName = u.schedule_name || u.name;
+  const hasLessons = ALL_TEACHERS[_schedName] && ALL_TEACHERS[_schedName].total > 0;
   if (!hasLessons) {
-    root.innerHTML = `<div class="history-empty">У вас нет преподаваемых уроков в расписании.</div>`;
+    if (u.role === 'head') {
+      root.innerHTML = `<div class="history-empty">Чтобы видеть своё расписание, укажите ФИО в кабинете (иконка профиля → «Моё ФИО в расписании»).</div>`;
+    } else {
+      root.innerHTML = `<div class="history-empty">У вас нет преподаваемых уроков в расписании.</div>`;
+    }
     return;
   }
 
@@ -2762,7 +2897,7 @@ function renderMy() {
   if (view === "today" && state.myDay !== today) state.myDay = today;
 
   // Build full week schedule (aggregated across ALL depts)
-  const week = teacherWeekSchedule(u.name);
+  const week = teacherWeekSchedule(_schedName);
 
   // Detect conflicts: same time slot used in 2+ depts on the same day
   const conflicts = {}; // { day: { time: [dept1, dept2...] } }

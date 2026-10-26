@@ -61,7 +61,7 @@ function authMiddleware(req, res, next) {
 
 async function getUserById(id) {
   const r = await db.query(
-    "SELECT id, email, name, first_name, role, title, dept, depts, subjects, must_change FROM users WHERE id=$1",
+    "SELECT id, email, name, first_name, schedule_name, role, title, dept, depts, subjects, must_change FROM users WHERE id=$1",
     [id]
   );
   return r.rows[0] || null;
@@ -114,9 +114,11 @@ app.get("/api/me", authMiddleware, async (req, res) => {
 });
 
 app.patch("/api/me", authMiddleware, async (req, res) => {
-  const { first_name } = req.body || {};
-  const val = (first_name || "").trim().slice(0, 50);
-  await db.query("UPDATE users SET first_name=$1 WHERE id=$2", [val || null, req.userId]);
+  const { first_name, schedule_name } = req.body || {};
+  const fields = [], vals = [];
+  if (first_name !== undefined) { fields.push(`first_name=$${fields.length+1}`); vals.push((first_name||"").trim().slice(0,50)||null); }
+  if (schedule_name !== undefined) { fields.push(`schedule_name=$${fields.length+1}`); vals.push((schedule_name||"").trim().slice(0,120)||null); }
+  if (fields.length) { vals.push(req.userId); await db.query(`UPDATE users SET ${fields.join(",")} WHERE id=$${vals.length}`, vals); }
   const u = await getUserById(req.userId);
   res.json({ user: u });
 });
@@ -2145,6 +2147,7 @@ async function bootstrap() {
     await db.query(sql);
     // Migrations
     await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(50)");
+    await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS schedule_name VARCHAR(120)");
     console.log("Schema OK.");
 
     // Auto-seed if users table is empty

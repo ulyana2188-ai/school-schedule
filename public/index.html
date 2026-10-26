@@ -170,6 +170,7 @@
     <button class="section-btn" data-section="availability" id="availabilityTab" onclick="setSection('availability')">
       🗓 Когда я свободна
     </button>
+    <button class="section-btn" id="tabCustomizeBtn" style="display:none;opacity:.6;font-size:18px;padding:6px 10px;" onclick="openTabCustomizer()" title="Настроить вкладки">⋯</button>
   </div>
   </div>
 
@@ -696,6 +697,20 @@
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
       <button class="btn secondary" onclick="closeCopyPicker()">Отмена</button>
       <button class="btn" onclick="confirmCopy()">⧉ Скопировать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab Customizer Modal -->
+<div class="modal-bg" id="tabCustomizerModal">
+  <div class="modal" style="max-width:360px;">
+    <button class="link-btn" onclick="document.getElementById('tabCustomizerModal').classList.remove('show')" style="font-size:14px;float:right;">✕</button>
+    <h3 style="margin:0 0 12px;">Настройка вкладок</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px;">Скройте вкладки, которые вы не используете. Их всегда можно вернуть здесь.</p>
+    <div id="tabCustomizerList" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn secondary" onclick="resetTabVisibility()">Сбросить</button>
+      <button class="btn" onclick="document.getElementById('tabCustomizerModal').classList.remove('show')">Готово</button>
     </div>
   </div>
 </div>

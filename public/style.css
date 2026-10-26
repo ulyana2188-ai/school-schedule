@@ -608,8 +608,10 @@ body.edit-mode table.schedule td { position: relative; }
   .cell-teacher { font-size: 9px; }
 
   /* Stats */
-  .stats-row { flex-wrap: wrap; }
-  .stat-card { flex: 1 0 calc(50% - 6px); min-width: 0; }
+  .stats-row { flex-wrap: nowrap; gap: 8px; }
+  .stat-card { flex: 1; min-width: 0; padding: 10px 10px; }
+  .stat-card .value { font-size: 18px; }
+  .stat-card .label { font-size: 10px; }
 
   /* Modal */
   .modal { padding: 14px; width: 98%; border-radius: 12px; max-height: 90vh; }
