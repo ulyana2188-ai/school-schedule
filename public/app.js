@@ -1584,10 +1584,11 @@ function renderToday() {
       const sched = DATA[dept].schedule[today] || {};
       for (const lkey in sched) for (const cls in sched[lkey].classes) countToday++;
     }
+    const _repsToday = ALL_REPLACEMENTS.filter(r => r.day === today).length;
     html += `<div class="stats-row">
-      <div class="stat-card cyan"><div class="label">Уроков сегодня</div><div class="value">${countToday}</div></div>
-      <div class="stat-card magenta"><div class="label">Замен в системе</div><div class="value">${ALL_REPLACEMENTS.length}</div></div>
-      <div class="stat-card"><div class="label">Конфликтов</div><div class="value">${CONFLICTS.length}</div></div>
+      <div class="stat-card cyan"><div class="label">📚 Уроков сегодня</div><div class="value">${countToday}</div></div>
+      <div class="stat-card magenta"><div class="label">🔄 Замен сегодня</div><div class="value">${_repsToday}</div></div>
+      <div class="stat-card ${CONFLICTS.length > 0 ? 'green' : ''}"><div class="label">⚠️ Конфликтов</div><div class="value">${CONFLICTS.length}</div></div>
     </div>`;
     // Recent replacements — only last 14 days
     const _cutoff14 = new Date(); _cutoff14.setDate(_cutoff14.getDate() - 14);
