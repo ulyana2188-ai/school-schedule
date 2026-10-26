@@ -332,6 +332,8 @@ td.has-conflict::after { content: "⚠"; float: right; color: var(--conflict-bor
 .stat-card.green .value { color: var(--ip-green); }
 .stat-card.cyan .value { color: var(--ip-cyan); }
 .stat-card.magenta .value { color: var(--ip-magenta); }
+.stat-card.red::before { background: #ef4444; }
+.stat-card.red .value { color: #ef4444; }
 
 /* Modal */
 .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(2px); }

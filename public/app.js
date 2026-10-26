@@ -1195,6 +1195,7 @@ function setSection(s) {
   if (s === "stats") renderStats_section();
   if (s === "availability") renderAvailability();
 }
+function navigate(s) { setSection(s); }
 function populateClassFilter() {
   const sel = document.getElementById("classFilter");
   const dept = DATA[state.dept];
@@ -1585,16 +1586,52 @@ function renderToday() {
       for (const lkey in sched) for (const cls in sched[lkey].classes) countToday++;
     }
     const _repsToday = ALL_REPLACEMENTS.filter(r => r.day === today).length;
+    // Count absent today without a replacement
+    const _absentToday = ABSENCES.filter(a => a.start_date <= today && a.end_date >= today);
+    const _absentNoCover = _absentToday.filter(a => !ALL_REPLACEMENTS.some(r => r.day === today && r.absent_name === a.user_name));
     html += `<div class="stats-row">
       <div class="stat-card cyan"><div class="label">📚 Уроков сегодня</div><div class="value">${countToday}</div></div>
       <div class="stat-card magenta"><div class="label">🔄 Замен сегодня</div><div class="value">${_repsToday}</div></div>
-      <div class="stat-card ${CONFLICTS.length > 0 ? 'green' : ''}"><div class="label">⚠️ Конфликтов</div><div class="value">${CONFLICTS.length}</div></div>
+      <div class="stat-card ${CONFLICTS.length > 0 ? 'red' : ''}"><div class="label">⚠️ Конфликтов</div><div class="value">${CONFLICTS.length}</div></div>
     </div>`;
+
+    // Absent teachers today
+    if (_absentToday.length > 0) {
+      const _uncovered = _absentNoCover.length;
+      html += `<div style="display:flex;align-items:center;gap:10px;margin:18px 4px 8px;">
+        <div style="font-size:13px;font-weight:600;">🏖 Отсутствуют сегодня</div>
+        ${_uncovered > 0 ? `<span style="background:var(--ip-magenta);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">${_uncovered} без замены</span>` : `<span style="background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">все закрыты ✓</span>`}
+        <button class="btn btn-secondary" style="margin-left:auto;font-size:11px;padding:4px 10px;" onclick="navigate('generator')">+ Назначить замену</button>
+      </div>`;
+      html += `<div class="today-list">`;
+      const KINDS = { vacation: "Отпуск", sick: "Больничный", personal: "За свой счёт", other: "Прочее" };
+      for (const a of _absentToday) {
+        const hasRep = ALL_REPLACEMENTS.some(r => r.day === today && r.absent_name === a.user_name);
+        const repCount = ALL_REPLACEMENTS.filter(r => r.day === today && r.absent_name === a.user_name).length;
+        html += `<div class="today-card" style="border-left:3px solid ${hasRep ? '#10b981' : 'var(--ip-magenta)'};">
+          <div class="today-time" style="min-width:80px;">
+            <span style="font-size:11px;font-weight:600;color:${hasRep ? '#10b981' : 'var(--ip-magenta)'};">${hasRep ? `✓ ${repCount} зам.` : '⚠ нет замены'}</span>
+          </div>
+          <div class="today-main">
+            <div class="today-subj"><span class="click-link" onclick="openTeacherCard('${escapeHtml(a.user_name)}')">${escapeHtml(a.user_name)}</span></div>
+            <div class="today-meta">${a.user_dept ? escapeHtml(a.user_dept) + ' · ' : ''}${KINDS[a.kind] || a.kind}${a.note ? ' · ' + escapeHtml(a.note) : ''}</div>
+          </div>
+          ${!hasRep ? `<div><button class="btn" style="font-size:11px;padding:4px 10px;" onclick="navigate('generator')">Назначить</button></div>` : ''}
+        </div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-top:16px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">🎉</span>
+        <div><div style="font-weight:600;font-size:13px;">Все на месте!</div><div style="font-size:12px;color:var(--text-muted);">Сегодня никто не отсутствует</div></div>
+      </div>`;
+    }
+
     // Recent replacements — only last 14 days
     const _cutoff14 = new Date(); _cutoff14.setDate(_cutoff14.getDate() - 14);
     const recent = ALL_REPLACEMENTS.filter(r => new Date(r.created_at) >= _cutoff14).slice(0, 8);
     if (recent.length) {
-      html += `<div style="font-size:13px;font-weight:600;margin:14px 4px 8px;">Последние замены</div><div class="history-list">`;
+      html += `<div style="font-size:13px;font-weight:600;margin:20px 4px 8px;">🔄 Последние замены</div><div class="history-list">`;
       for (const r of recent) {
         html += `<div class="history-item">
           <div class="history-date">${new Date(r.created_at).toLocaleDateString("ru-RU")}</div>
@@ -1605,8 +1642,6 @@ function renderToday() {
         </div>`;
       }
       html += `</div>`;
-    } else {
-      html += `<div style="font-size:13px;color:var(--text-muted);margin:14px 4px 4px;">Замен за последние 14 дней нет 🎉</div>`;
     }
   }
   root.innerHTML = html;
