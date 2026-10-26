@@ -1221,6 +1221,9 @@ function initUI() {
     if (tCount) tCount.style.display = "none";
     const teachersTab = document.getElementById("teachersTab");
     if (teachersTab) teachersTab.style.display = "none";
+    // Hide "Когда я свободна" — teachers don't need to manage this themselves
+    const availTab = document.getElementById("availabilityTab");
+    if (availTab) availTab.style.display = "none";
   }
 
   setSection("today"); // default
