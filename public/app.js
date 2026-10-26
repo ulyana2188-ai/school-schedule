@@ -674,7 +674,7 @@ function renderAllTeachers() {
     }
     const acc = ACCOUNTS.find(a => a.name === t);
     const email = acc ? acc.email : "—";
-    const isHead = CURRENT_USER && CURRENT_USER.role === "head";
+    const isHead = CURRENT_USER && CURRENT_USER.role === "head" || CURRENT_USER.role === "director";
     const emailCell = `<div class="teacher-email-cell">
       <div class="teacher-email click-link" onclick="event.stopPropagation(); openTeacherCard('${escapeHtml(t).replace(/'/g,"\\'")}')">${escapeHtml(email)}</div>
       <div class="teacher-email-actions">
@@ -719,6 +719,7 @@ function renderAllTeachers() {
 function getUserTitle(u) {
   if (u.title) return u.title;
   // Fallback: derive from role
+  if (u.role === "director") return "Директор";
   if (u.role === "head") return "Руководитель отделения";
   return "Учитель";
 }
@@ -756,7 +757,7 @@ function renderUserMenu() {
         <button onclick="saveFirstName()" class="btn" style="padding:5px 10px;font-size:12px;">Сохранить</button>
       </div>
     </div>
-    ${u.role === 'head' ? `<div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
+    ${u.role === 'head' || u.role === 'director' ? `<div style="padding:4px 14px 8px;border-top:1px solid var(--border);">
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Моё ФИО в расписании</div>
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Укажите точно так, как в расписании — чтобы видеть свои уроки</div>
       <div style="display:flex;gap:6px;align-items:center;">
@@ -870,7 +871,7 @@ function renderInbox() {
     // Parse replacement id from metadata if present
     const replacementId = n.replacement_id || null;
     const respStatus = n.response_status || null; // 'pending'/'confirmed'/'declined'
-    const isReplacementNotif = replacementId && CURRENT_USER && CURRENT_USER.role !== "head";
+    const isReplacementNotif = replacementId && CURRENT_USER && CURRENT_USER.role !== "head" && CURRENT_USER.role !== "director";
     let actionBtns = "";
     if (isReplacementNotif && respStatus === "pending") {
       actionBtns = `<div style="display:flex;gap:8px;margin-top:8px;" onclick="event.stopPropagation()">
@@ -1239,7 +1240,7 @@ function initUI() {
   renderStats();
   renderConflictPanel();
   // Show admin tab and edit button for heads
-  if (CURRENT_USER && CURRENT_USER.role === "head") {
+  if (CURRENT_USER && CURRENT_USER.role === "head" || CURRENT_USER.role === "director") {
     document.getElementById("adminTab").style.display = "";
     document.getElementById("editModeBtn").style.display = "";
     const sht = document.getElementById("schedHistTab");
@@ -1291,7 +1292,7 @@ function initUI() {
   }
 
   // Also hide availability tab for heads — it's teacher-specific
-  if (CURRENT_USER && CURRENT_USER.role === "head") {
+  if (CURRENT_USER && CURRENT_USER.role === "head" || CURRENT_USER.role === "director") {
     const availTabHead = document.getElementById("availabilityTab");
     if (availTabHead) availTabHead.style.display = "none";
     // Show tab customizer button for heads (many tabs)
@@ -1335,7 +1336,7 @@ function saveHiddenTabs(arr) {
 }
 
 function applyTabVisibilityPrefs() {
-  if (!CURRENT_USER || CURRENT_USER.role !== "head") return;
+  if (!CURRENT_USER || CURRENT_USER.role !== "head" && CURRENT_USER.role !== "director") return;
   const hidden = getHiddenTabs();
   for (const sect of Object.keys(HEAD_CUSTOMIZABLE_TABS)) {
     const el = document.querySelector(`.section-btn[data-section="${sect}"]`);
@@ -1352,7 +1353,7 @@ function applyTabVisibilityPrefs() {
 }
 
 function openTabCustomizer() {
-  if (!CURRENT_USER || CURRENT_USER.role !== "head") return;
+  if (!CURRENT_USER || CURRENT_USER.role !== "head" && CURRENT_USER.role !== "director") return;
   const hidden = getHiddenTabs();
   let html = "";
   for (const [sect, label] of Object.entries(HEAD_CUSTOMIZABLE_TABS)) {
@@ -1528,7 +1529,8 @@ function renderToday() {
   const _greetHour = new Date().getHours();
   const _greetWord = _greetHour < 12 ? "Доброе утро" : _greetHour < 17 ? "Добрый день" : "Добрый вечер";
   // Use first_name if set; for heads without first_name, skip surname (it's just a role name)
-  const _rawFirst = u.first_name || (u.role !== 'head' ? (u.name || '').split(' ')[0] : null) || u.name;
+  const _isAdminRole = u.role === 'head' || u.role === 'director';
+  const _rawFirst = u.first_name || (!_isAdminRole ? (u.name || '').split(' ')[0] : null) || u.name;
   const _firstName = escapeHtml(_rawFirst);
   let html = `<div class="today-greeting">
     <h2>${_greetWord}, ${_firstName}!</h2>
@@ -1536,7 +1538,7 @@ function renderToday() {
   </div>`;
 
   const _mySchedName = u.schedule_name || u.name;
-  if (u.role === "teacher" || (u.role === "head" && ALL_TEACHERS[_mySchedName])) {
+  if (u.role === "teacher" || (u.role === "head" || u.role === "director" && ALL_TEACHERS[_mySchedName])) {
     const lessons = findUserLessonsToday(_mySchedName, today);
     if (lessons.length === 0) {
       html += `<div class="today-list"><div class="history-empty">Сегодня у вас нет уроков 🎉</div></div>`;
@@ -1705,7 +1707,7 @@ function renderHistory() {
 let _adminShowArchived = false;
 function renderAdmin() {
   const root = document.getElementById("sectionAdmin");
-  if (CURRENT_USER.role !== "head") { root.innerHTML = `<div class="history-empty">Раздел доступен только завучам</div>`; return; }
+  if (CURRENT_USER.role !== "head" && CURRENT_USER.role !== "director") { root.innerHTML = `<div class="history-empty">Раздел доступен только завучам</div>`; return; }
 
   const myDepts = getMyAllowedDepts();
   const active = ACCOUNTS.filter(a => a.is_active !== false && a.is_active !== "false" && a.is_active !== 0);
@@ -1738,7 +1740,7 @@ function renderAdmin() {
     </div>`;
     const sorted = shown.slice().sort((a,b) => (a.role===b.role?0:a.role==="head"?-1:1) || a.name.localeCompare(b.name, "ru"));
     for (const a of sorted) {
-      const titleDisplay = a.title || (a.role === "head" ? "Руководитель отделения" : "Учитель");
+      const titleDisplay = a.title || (a.role === "director" ? "Директор" : a.role === "head" ? "Руководитель отделения" : "Учитель");
       const isArchived = a.is_active === false;
       html += `<div class="admin-row" style="${isArchived ? 'opacity:.6;' : ''}">
         <div class="um-av ${avatarColor(a.name)}" style="${isArchived ? 'filter:grayscale(1);' : ''}">${getInitials(a.name)}</div>
@@ -1800,7 +1802,7 @@ function openAdminUserEdit(id) {
   document.getElementById("auName").value = a.name;
   document.getElementById("auEmail").value = a.email;
   document.getElementById("auRole").value = a.role;
-  document.getElementById("auTitle").value = a.title || (a.role === "head" ? "Руководитель отделения" : "Учитель");
+  document.getElementById("auTitle").value = a.title || (a.role === "director" ? "Директор" : a.role === "head" ? "Руководитель отделения" : "Учитель");
   document.getElementById("auDepts").value = (a.depts || []).join(", ");
   document.getElementById("auSubjects").value = (a.subjects || []).join(", ");
   document.getElementById("auError").textContent = "";
@@ -2121,7 +2123,7 @@ function openTeacherCard(name) {
 
     // Compute free windows (gaps between first and last lesson)
     let freeWindowsHtml = '';
-    if (state.user && state.user.role === 'head') {
+    if (state.user && state.user.role === 'head' || state.user.role === 'director') {
       const nos = lessons.map(l => l.lesson_no).filter(n => n != null && !isNaN(n));
       if (nos.length >= 2) {
         const minNo = Math.min(...nos);
@@ -2265,7 +2267,7 @@ function printSchedule() {
 
 // ============= EDIT MODE =============
 function getMyAllowedDepts() {
-  if (!CURRENT_USER || CURRENT_USER.role !== "head") return [];
+  if (!CURRENT_USER || CURRENT_USER.role !== "head" && CURRENT_USER.role !== "director") return [];
   if (CURRENT_USER.depts && CURRENT_USER.depts.length > 0) return CURRENT_USER.depts;
   if (CURRENT_USER.dept) return [CURRENT_USER.dept];
   return [];
@@ -2286,7 +2288,7 @@ function isDirector() {
 
 function toggleEditMode() {
   // For non-head, no-op
-  if (!CURRENT_USER || CURRENT_USER.role !== "head") return;
+  if (!CURRENT_USER || CURRENT_USER.role !== "head" && CURRENT_USER.role !== "director") return;
   EDIT_MODE = !EDIT_MODE;
   document.body.classList.toggle("edit-mode", EDIT_MODE);
   document.getElementById("editModeBtn").classList.toggle("active", EDIT_MODE);
@@ -2920,7 +2922,7 @@ function renderMy() {
   const _schedName = u.schedule_name || u.name;
   const hasLessons = ALL_TEACHERS[_schedName] && ALL_TEACHERS[_schedName].total > 0;
   if (!hasLessons) {
-    if (u.role === 'head') {
+    if (u.role === 'head' || u.role === 'director') {
       root.innerHTML = `<div class="history-empty">Чтобы видеть своё расписание, укажите ФИО в кабинете (иконка профиля → «Моё ФИО в расписании»).</div>`;
     } else {
       root.innerHTML = `<div class="history-empty">У вас нет преподаваемых уроков в расписании.</div>`;
@@ -3203,7 +3205,7 @@ function exportTeachersCSV() {
     const hours = tInfo ? tInfo.total : 0;
     const subjs = (a.subjects || (tInfo ? Object.keys(tInfo.subjectHours) : [])).join("; ");
     const depts = (a.depts || (a.dept ? [a.dept] : [])).join("; ");
-    const role = a.role === "head" ? "Завуч" : "Учитель";
+    const role = a.role === "director" ? "Директор" : a.role === "head" ? "Завуч" : "Учитель";
     const row = [a.name, a.email, role, depts, subjs, hours].map(v => {
       v = String(v == null ? "" : v);
       if (v.includes(",") || v.includes('"') || v.includes("\n")) return '"' + v.replace(/"/g, '""') + '"';
@@ -3297,7 +3299,7 @@ async function quickResetPwd(userId, name) {
 async function renderAbsences() {
   const root = document.getElementById("sectionAbsences");
   const u = CURRENT_USER;
-  const isHead = u.role === "head";
+  const isHead = u.role === "head" || u.role === "director";
 
   // Load data
   let absences = [];
@@ -3342,7 +3344,7 @@ function openAbsenceModal() {
   document.getElementById("absenceModal").classList.add("show");
   // Populate users dropdown for head
   const sel = document.getElementById("absUser");
-  if (CURRENT_USER.role === "head") {
+  if (CURRENT_USER.role === "head" || CURRENT_USER.role === "director") {
     sel.parentElement.style.display = "";
     sel.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}" ${a.id === CURRENT_USER.id ? "selected" : ""}>${escapeHtml(a.name)} · ${(a.depts || [a.dept || '']).join(", ")}</option>`).join("");
   } else {
@@ -3358,7 +3360,7 @@ function openAbsenceModal() {
 async function saveAbsence() {
   const err = document.getElementById("absErr");
   err.textContent = "";
-  const user_id = (CURRENT_USER.role === "head") ? parseInt(document.getElementById("absUser").value) : CURRENT_USER.id;
+  const user_id = (CURRENT_USER.role === "head" || CURRENT_USER.role === "director") ? parseInt(document.getElementById("absUser").value) : CURRENT_USER.id;
   const start_date = document.getElementById("absStart").value;
   const end_date = document.getElementById("absEnd").value || start_date;
   const kind = document.getElementById("absKind").value;
@@ -3384,7 +3386,7 @@ async function deleteAbsence(id) {
 async function renderAcsup() {
   const root = document.getElementById("sectionAcsup");
   const u = CURRENT_USER;
-  const isHead = u.role === "head";
+  const isHead = u.role === "head" || u.role === "director";
 
   let sessions = [];
   try { const r = await API.acsupList(); sessions = r.sessions; ACSUP = sessions; } catch(e) {}
@@ -4652,7 +4654,7 @@ async function renderAbsReq() {
     el.innerHTML = `<div style="padding:16px;color:var(--err)">Ошибка: ${escapeHtml(e.message)}</div>`;
     return;
   }
-  const isHead = CURRENT_USER && CURRENT_USER.role === "head";
+  const isHead = CURRENT_USER && CURRENT_USER.role === "head" || CURRENT_USER.role === "director";
   const kindLabel = { sick: "🤒 Больничный", personal: "📋 Личные обстоятельства", other: "📝 Другое" };
   const statusLabel = { pending: "⏳ На рассмотрении", confirmed: "✅ Подтверждено", declined: "❌ Отклонено" };
 
@@ -5674,7 +5676,7 @@ async function renderAvailability() {
   const root = document.getElementById("sectionAvailability");
   if (!root) return;
 
-  const isHead = CURRENT_USER && CURRENT_USER.role === "head";
+  const isHead = CURRENT_USER && CURRENT_USER.role === "head" || CURRENT_USER.role === "director";
   const teachersList = isHead ? Object.keys(ALL_TEACHERS || {}) : null;
 
   // Default: own availability
@@ -6050,7 +6052,7 @@ document.addEventListener("keydown", function(e) {
   }
 
   // E — toggle edit mode (head only, on schedule section)
-  if (e.key === "e" && state.section === "schedule" && CURRENT_USER?.role === "head" && !e.ctrlKey && !e.metaKey) {
+  if (e.key === "e" && state.section === "schedule" && (CURRENT_USER?.role === "head" || CURRENT_USER?.role === "director") && !e.ctrlKey && !e.metaKey) {
     toggleEditMode();
     return;
   }

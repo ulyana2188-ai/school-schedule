@@ -176,7 +176,7 @@ app.post("/api/schedule/edits", authMiddleware, requireHead, async (req, res) =>
   const { dept, day, lesson_key, cls, lesson_no, time, subject, teacher, room, groups, cleared } = req.body || {};
   if (!dept || !day || !lesson_key || !cls) return res.status(400).json({ error: "bad_request" });
   // Check dept access
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (!allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
   try {
     // Get current state for history
@@ -210,7 +210,7 @@ app.post("/api/schedule/edits", authMiddleware, requireHead, async (req, res) =>
 
 // Revert a cell to static version
 app.delete("/api/schedule/edits/:dept/:day/:lesson_key/:cls", authMiddleware, requireHead, async (req, res) => {
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (!allowedDepts.includes(req.params.dept)) return res.status(403).json({ error: "wrong_dept" });
   try {
     const before = await db.query("SELECT * FROM schedule_edits WHERE dept=$1 AND day=$2 AND lesson_key=$3 AND cls=$4",
@@ -346,7 +346,7 @@ app.post("/api/notifications/read-all", authMiddleware, async (req, res) => {
 app.get("/api/absences", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
   let rows;
-  if (u.role === "head") {
+  if (u.role === "head" || u.role === "director") {
     rows = await db.query(
       `SELECT a.*, us.name as user_name, us.dept as user_dept FROM user_absences a
        JOIN users us ON us.id = a.user_id
@@ -363,8 +363,9 @@ app.post("/api/absences", authMiddleware, async (req, res) => {
   if (!start_date || !end_date || !kind) return res.status(400).json({ error: "bad_request" });
   const u = await getUserById(req.userId);
   // Teacher can only add for themselves, head can add for anyone
-  const targetId = (u.role === "head" && user_id) ? parseInt(user_id) : req.userId;
-  if (u.role !== "head" && targetId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  const isAdmin = u.role === "head" || u.role === "director";
+  const targetId = (isAdmin && user_id) ? parseInt(user_id) : req.userId;
+  if (!isAdmin && targetId !== req.userId) return res.status(403).json({ error: "forbidden" });
   const r = await db.query(
     `INSERT INTO user_absences (user_id, start_date, end_date, kind, note, created_by)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -377,7 +378,7 @@ app.delete("/api/absences/:id", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
   const a = await db.query("SELECT user_id FROM user_absences WHERE id=$1", [req.params.id]);
   if (!a.rows[0]) return res.status(404).json({ error: "not_found" });
-  if (u.role !== "head" && a.rows[0].user_id !== req.userId) return res.status(403).json({ error: "forbidden" });
+  if (u.role !== "head" && u.role !== "director" && a.rows[0].user_id !== req.userId) return res.status(403).json({ error: "forbidden" });
   await db.query("DELETE FROM user_absences WHERE id=$1", [req.params.id]);
   res.json({ ok: true });
 });
@@ -397,7 +398,7 @@ app.get("/api/absences/check", authMiddleware, async (req, res) => {
 app.get("/api/academic-support", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
   let rows;
-  if (u.role === "head") {
+  if (u.role === "head" || u.role === "director") {
     // Head sees all in their depts
     const depts = (u.depts && u.depts.length > 0) ? u.depts : [u.dept];
     rows = await db.query(
@@ -436,7 +437,7 @@ app.delete("/api/academic-support/:id", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
   const s = await db.query("SELECT teacher_id FROM academic_support WHERE id=$1", [req.params.id]);
   if (!s.rows[0]) return res.status(404).json({ error: "not_found" });
-  if (u.role !== "head" && s.rows[0].teacher_id !== req.userId) return res.status(403).json({ error: "forbidden" });
+  if (u.role !== "head" && u.role !== "director" && s.rows[0].teacher_id !== req.userId) return res.status(403).json({ error: "forbidden" });
   await db.query("DELETE FROM academic_support WHERE id=$1", [req.params.id]);
   res.json({ ok: true });
 });
@@ -551,7 +552,7 @@ app.post("/api/schedule/import", authMiddleware, requireHead, upload.single("fil
   const dept = req.body.dept;
   if (!dept) return res.status(400).json({ error: "no_dept" });
   // Check dept access
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (!allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
   try {
     const wb = xlsx.read(req.file.buffer, { type: "buffer" });
@@ -861,7 +862,7 @@ app.get("/api/schedule/overrides", authMiddleware, async (req, res) => {
 // DELETE /api/schedule/overrides/:dept — revert to base schedule.json
 app.delete("/api/schedule/overrides/:dept", authMiddleware, requireHead, async (req, res) => {
   const dept = decodeURIComponent(req.params.dept);
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (!allowedDepts.includes(dept) && req.user.role !== "director")
     return res.status(403).json({ error: "wrong_dept" });
   await db.query("DELETE FROM schedule_overrides WHERE dept=$1", [dept]);
@@ -873,7 +874,7 @@ app.post("/api/schedule/import-full", authMiddleware, requireHead, upload.single
   if (!req.file) return res.status(400).json({ error: "no_file" });
   const dept = req.body.dept;
   if (!dept) return res.status(400).json({ error: "no_dept" });
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (!allowedDepts.includes(dept) && req.user.role !== "director")
     return res.status(403).json({ error: "wrong_dept" });
   try {
@@ -922,12 +923,17 @@ app.get("/api/schedule/history", authMiddleware, async (req, res) => {
   res.json({ history: r.rows });
 });
 
-// === Admin (head only) ===
+// === Admin (head or director) ===
+const ALL_DEPTS = ["Империал","Пушкина","Чкалова","Кирова"];
 async function requireHead(req, res, next) {
   const u = await getUserById(req.userId);
-  if (!u || u.role !== "head") return res.status(403).json({ error: "forbidden" });
+  if (!u || (u.role !== "head" && u.role !== "director")) return res.status(403).json({ error: "forbidden" });
   req.user = u;
   next();
+}
+function getAllowedDepts(user) {
+  if (user.role === "director") return ALL_DEPTS;
+  return (user.depts && user.depts.length > 0) ? user.depts : (user.dept ? [user.dept] : ALL_DEPTS);
 }
 
 // Create a new user
@@ -1061,8 +1067,9 @@ app.post("/api/availability", authMiddleware, async (req, res) => {
   const { teacher_id, dept, slots } = req.body || {};
   if (!Array.isArray(slots)) return res.status(400).json({ error: "bad_request" });
   // Teacher can only edit own availability; head can edit anyone's
-  const targetId = (u.role === "head" && teacher_id) ? parseInt(teacher_id) : req.userId;
-  if (u.role !== "head" && targetId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  const isAdminUser = u.role === "head" || u.role === "director";
+  const targetId = (isAdminUser && teacher_id) ? parseInt(teacher_id) : req.userId;
+  if (!isAdminUser && targetId !== req.userId) return res.status(403).json({ error: "forbidden" });
   const client = await db.pool.connect();
   try {
     await client.query("BEGIN");
@@ -1413,7 +1420,7 @@ app.patch("/api/replacements/:id/respond", authMiddleware, async (req, res) => {
 app.get("/api/absence-requests", authMiddleware, async (req, res) => {
   const u = await getUserById(req.userId);
   let rows;
-  if (u.role === "head") {
+  if (u.role === "head" || u.role === "director") {
     const depts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
     rows = await db.query(
       `SELECT r.*, us.name as teacher_name, rv.name as reviewer_name
@@ -1737,7 +1744,7 @@ app.get("/api/stats/replacements", authMiddleware, requireHead, async (req, res)
   const params = [];
   const conditions = [];
 
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (dept) {
     if (!allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
     params.push(dept);
@@ -1783,7 +1790,7 @@ app.get("/api/stats/replacements", authMiddleware, requireHead, async (req, res)
 // GET /api/stats/workload — teacher lesson count per week from schedule
 // Returns per-teacher lesson count computed from current schedule (static + edits)
 app.get("/api/stats/workload", authMiddleware, requireHead, async (req, res) => {
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   const { dept } = req.query;
   if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
   const depts = dept ? [dept] : allowedDepts;
@@ -1854,7 +1861,7 @@ app.get("/api/stats/workload", authMiddleware, requireHead, async (req, res) => 
 
 // GET /api/stats/workload/xlsx — download workload as Excel
 app.get("/api/stats/workload/xlsx", authMiddleware, requireHead, async (req, res) => {
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   const { dept } = req.query;
   if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
   const depts = dept ? [dept] : allowedDepts;
@@ -1937,7 +1944,7 @@ app.get("/api/stats/workload/xlsx", authMiddleware, requireHead, async (req, res
 // GET /api/stats/replacements/xlsx — download replacements as Excel
 app.get("/api/stats/replacements/xlsx", authMiddleware, requireHead, async (req, res) => {
   const { dept, from_date, to_date } = req.query;
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
   const depts = dept ? [dept] : allowedDepts;
   const params = [depts];
@@ -1977,7 +1984,7 @@ app.get("/api/stats/replacements/xlsx", authMiddleware, requireHead, async (req,
 
 // GET /api/schedule/room-conflicts — find all room conflicts in current schedule
 app.get("/api/schedule/room-conflicts", authMiddleware, requireHead, async (req, res) => {
-  const allowedDepts = req.user.depts && req.user.depts.length > 0 ? req.user.depts : [req.user.dept];
+  const allowedDepts = getAllowedDepts(req.user);
   const { dept } = req.query;
   if (dept && !allowedDepts.includes(dept)) return res.status(403).json({ error: "wrong_dept" });
   const depts = dept ? [dept] : allowedDepts;
