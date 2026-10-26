@@ -24,6 +24,15 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_active') THEN
     ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='replacements' AND column_name='comment') THEN
+    ALTER TABLE replacements ADD COLUMN comment TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='replacements' AND column_name='absent_name') THEN
+    ALTER TABLE replacements ADD COLUMN absent_name TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='replacements' AND column_name='replacement_name') THEN
+    ALTER TABLE replacements ADD COLUMN replacement_name TEXT;
+  END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));

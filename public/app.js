@@ -127,6 +127,7 @@ let state = {
   day: "Понедельник",
   view: "grid",
   classFilter: "all",
+  teacherFilter: null,  // highlight teacher in schedule
   historyFilters: { dept: "all", teacher: "", from: "", to: "" },
   myView: "today",
   myDay: "Понедельник",
@@ -426,9 +427,23 @@ function renderCellContent(info, conflictTeachers) {
     const sCls = subjectClass(subj);
     const conflict = t && conflictTeachers.has(t);
     const tEsc = escapeHtml(t).replace(/'/g, "\\'");
-    const teacherEl = t ? `<div class="cell-teacher ${EDIT_MODE ? '' : 'click-link'}" ${!EDIT_MODE ? `onclick="event.stopPropagation(); openTeacherCard('${tEsc}')"` : ''} style="${conflict ? 'color:#E6007E;font-weight:600' : ''}">${escapeHtml(t)}${conflict ? ' ⚠' : ''}</div>` : "";
+    const isFiltered = state.teacherFilter && t === state.teacherFilter;
+    // Click on teacher name: if already filtered, open card; otherwise set filter
+    let teacherOnClick;
+    if (EDIT_MODE) teacherOnClick = '';
+    else if (state.teacherFilter === t) teacherOnClick = `onclick="event.stopPropagation(); openTeacherCard('${tEsc}')"`;
+    else teacherOnClick = `onclick="event.stopPropagation(); setTeacherFilter('${tEsc}')"`;
+    const teacherEl = t ? `<div class="cell-teacher ${EDIT_MODE ? '' : 'click-link'}" ${teacherOnClick} style="${conflict ? 'color:#E6007E;font-weight:600' : ''}${isFiltered ? ';background:rgba(99,102,241,.18);border-radius:3px;padding:0 3px;' : ''}">${escapeHtml(t)}${conflict ? ' ⚠' : ''}</div>` : "";
     return `<div class="cell-group"><div class="cell-subject ${sCls}">${escapeHtml(subj)}${r ? `<span class="cell-room">${escapeHtml(r)}</span>` : ""}</div>${teacherEl}</div>`;
   }).join("");
+}
+function setTeacherFilter(name) {
+  state.teacherFilter = name;
+  render();
+}
+function clearTeacherFilter() {
+  state.teacherFilter = null;
+  render();
 }
 function renderGrid() {
   const dept = DATA[state.dept];
@@ -468,6 +483,8 @@ function renderGrid() {
         const items = info ? (info.groups ? info.groups : [info]) : [];
         const hasConflictTeacher = items.some(it => it.teacher && conflictTeachers.has(it.teacher));
         const wasEdited = info && info._edited;
+        const hasFilteredTeacher = state.teacherFilter && items.some(it => it.teacher === state.teacherFilter);
+        const isDimmed = state.teacherFilter && !hasFilteredTeacher;
         const cellClasses = [];
         if (hasConflictTeacher) cellClasses.push("has-conflict");
         if (wasEdited) cellClasses.push("cell-edited");
@@ -477,7 +494,7 @@ function renderGrid() {
           ? `draggable="true" data-cell="${escapeHtml(state.dept)}|${escapeHtml(state.day)}|${escapeHtml(lkey)}|${cls}|${ld.lesson_no}|${escapeHtml(ld.time)}" ondragstart="onCellDragStart(event)" ondragover="onCellDragOver(event)" ondragleave="onCellDragLeave(event)" ondrop="onCellDrop(event)" ondragend="onCellDragEnd(event)"`
           : '';
         const handle = canEditHere && info ? '<span class="drag-handle">⋮⋮</span>' : '';
-        html += `<td class="${cellClasses.join(' ')}" ${clickAttr} ${dragAttrs}>${handle}${renderCellContent(info, conflictTeachers)}</td>`;
+        html += `<td class="${cellClasses.join(' ')}" ${clickAttr} ${dragAttrs} style="${isDimmed ? 'opacity:.25;' : ''}">${handle}${renderCellContent(info, conflictTeachers)}</td>`;
       }
       html += `</tr>`;
     }
@@ -485,6 +502,16 @@ function renderGrid() {
     return html;
   }
   let content = "";
+  if (state.teacherFilter) {
+    const tf = state.teacherFilter;
+    const week = teacherWeekSchedule(tf);
+    let totalLessons = DAYS.reduce((s,d) => s + week[d].length, 0);
+    content += `<div class="edit-mode-banner" style="background:rgba(99,102,241,.12);border-color:var(--ip-blue);">
+      🔍 Фильтр: <b>${escapeHtml(tf)}</b> · ${totalLessons} уроков в неделю
+      <button class="link-btn" onclick="openTeacherCard('${escapeHtml(tf).replace(/'/g,"\\'")}')">👤 Карточка</button>
+      <button class="link-btn" onclick="clearTeacherFilter()" style="margin-left:auto;color:var(--ip-magenta);">✕ Снять фильтр</button>
+    </div>`;
+  }
   if (EDIT_MODE) {
     if (!canEditDept(state.dept)) {
       const myDepts = getMyAllowedDepts();
@@ -829,6 +856,7 @@ function showReplacement() {
   document.getElementById("repTeacher").value = "";
   document.getElementById("repLessons").innerHTML = "";
   document.getElementById("repNotify").innerHTML = "";
+  const rc = document.getElementById("repComment"); if (rc) rc.value = "";
 }
 function closeModal() { document.getElementById("modalBg").classList.remove("show"); }
 function populateRepTeacherList() {
@@ -921,6 +949,16 @@ function findReplacementCandidates(absentTeacher, lessonInfo) {
 }
 function onRepTeacherChange() { _repState.teacher = document.getElementById("repTeacher").value; refreshRepLessons(); }
 function onRepDayChange() { _repState.day = document.getElementById("repDay").value; refreshRepLessons(); }
+function toggleRepMultiDay() {
+  const on = document.getElementById("repMultiDay")?.checked;
+  const wrap = document.getElementById("repMultiDayWrap");
+  if (wrap) wrap.style.display = on ? "" : "none";
+  if (on) {
+    // Pre-check the currently selected day
+    const cur = document.getElementById("repDay").value;
+    for (const cb of document.querySelectorAll(".repDayCheck")) cb.checked = cb.value === cur;
+  }
+}
 function refreshRepLessons() {
   const t = document.getElementById("repTeacher").value;
   const day = document.getElementById("repDay").value;
@@ -996,10 +1034,18 @@ function refreshRepNotify() {
 }
 async function confirmReplacements() {
   const t = _repState.teacher;
-  const day = _repState.day;
   if (!t) { alert("Выберите учителя"); return; }
   const tAcct = findAccountByName(t);
   if (!tAcct) { alert("Аккаунт отсутствующего учителя не найден"); return; }
+
+  // Determine days (single or multi)
+  const multiDay = document.getElementById("repMultiDay")?.checked;
+  let days = [_repState.day];
+  if (multiDay) {
+    days = [...document.querySelectorAll(".repDayCheck:checked")].map(cb => cb.value);
+    if (days.length === 0) { alert("Выберите хотя бы один день"); return; }
+  }
+
   const items = [];
   for (const L of _repState.lessons) {
     const ci = _repState.selections[L.id];
@@ -1019,11 +1065,16 @@ async function confirmReplacements() {
   for (const cb of document.querySelectorAll("#repNotify input[type=checkbox]")) {
     if (cb.checked) notifyIds.push(parseInt(cb.dataset.uid));
   }
+  const comment = (document.getElementById("repComment")?.value || "").trim() || undefined;
   try {
-    const res = await API.createReplacements({ day, items, absent_user_id: tAcct.id, notify_user_ids: notifyIds });
+    let totalCreated = 0;
+    for (const day of days) {
+      const res = await API.createReplacements({ day, items, absent_user_id: tAcct.id, notify_user_ids: notifyIds, comment });
+      totalCreated += res.created_count || 0;
+    }
     closeModal();
     await refreshNotifications();
-    alert(`Создано замен: ${res.created_count}. Уведомления отправлены.`);
+    showToast(`Создано замен: ${totalCreated} на ${days.length} ${days.length === 1 ? "день" : "дней"}`);
   } catch (e) {
     alert("Ошибка: " + e.message);
   }
@@ -1389,7 +1440,7 @@ function renderHistory() {
         <div><b>${escapeHtml(r.day)}</b> · урок ${r.lesson_no}<br><span style="color:var(--text-muted);font-size:11px;">${escapeHtml(r.time || '')}</span></div>
         <div>${escapeHtml(r.dept)} · <span class="click-link" onclick="openClassCard('${escapeHtml(r.dept)}','${escapeHtml(r.cls)}')">${escapeHtml(r.cls || '')} кл</span> · ${escapeHtml(r.subject || '')}${r.room ? '<br><span style="color:var(--text-muted);">каб ' + escapeHtml(r.room) + '</span>' : ''}</div>
         <div><span class="click-link" onclick="openTeacherCard('${escapeHtml(r.absent_name)}')">${escapeHtml(r.absent_name || '')}</span> <span class="history-arrow">→</span> <span class="click-link" onclick="openTeacherCard('${escapeHtml(r.replacement_name)}')">${escapeHtml(r.replacement_name || '')}</span></div>
-        <div></div>
+        <div>${r.comment ? `<span style="color:var(--text-muted);font-size:11px;">💬 ${escapeHtml(r.comment)}</span>` : ''}</div>
       </div>`;
     }
     html += `</div>`;
@@ -1769,6 +1820,12 @@ function openTeacherCard(name) {
     <div class="subj-chips">${subjEntries.map(([s,h]) => `<span class="subj-chip"><span class="subj-chip-name">${escapeHtml(s)}</span><span class="subj-chip-hours">${h}ч</span></span>`).join("")}</div>
   </div>`;
 
+  // Build lookup: lesson_no → time string (from LESSON_TIMES)
+  const ltMap = {};
+  if (typeof LESSON_TIMES !== 'undefined') {
+    for (const lt of LESSON_TIMES) ltMap[lt.no] = lt.time;
+  }
+
   html += `<div style="margin-bottom:8px;"><div style="font-size:11px;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:6px;">Расписание на неделю</div>`;
   for (const day of DAYS) {
     const lessons = week[day];
@@ -1776,6 +1833,28 @@ function openTeacherCard(name) {
       html += `<div style="padding:6px 0;border-bottom:1px solid var(--border);"><b>${day}</b> <span style="color:var(--text-muted);font-size:11px;">— нет уроков</span></div>`;
       continue;
     }
+
+    // Compute free windows (gaps between first and last lesson)
+    let freeWindowsHtml = '';
+    if (state.user && state.user.role === 'head') {
+      const nos = lessons.map(l => l.lesson_no).filter(n => n != null && !isNaN(n));
+      if (nos.length >= 2) {
+        const minNo = Math.min(...nos);
+        const maxNo = Math.max(...nos);
+        const busyNos = new Set(nos);
+        const gaps = [];
+        for (let n = minNo + 1; n < maxNo; n++) {
+          if (!busyNos.has(n)) {
+            const t = ltMap[n] || `урок ${n}`;
+            gaps.push(`<span style="background:rgba(234,179,8,.15);color:#92400e;border-radius:4px;padding:1px 6px;font-size:11px;">🪟 ${escapeHtml(t)}</span>`);
+          }
+        }
+        if (gaps.length > 0) {
+          freeWindowsHtml = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${gaps.join('')}</div>`;
+        }
+      }
+    }
+
     html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
       <div style="font-weight:600;margin-bottom:4px;">${day}</div>`;
     for (const L of lessons) {
@@ -1784,6 +1863,9 @@ function openTeacherCard(name) {
         <span style="font-weight:600;">${escapeHtml(L.subject || '—')}</span>
         <span style="color:var(--text-muted);">${escapeHtml(L.dept)} · ${escapeHtml(L.cls)} кл${L.room ? ' · каб ' + escapeHtml(L.room) : ''}</span>
       </div>`;
+    }
+    if (freeWindowsHtml) {
+      html += `<div style="margin-top:3px;font-size:11px;color:var(--text-muted);">Окна: ${freeWindowsHtml}</div>`;
     }
     html += `</div>`;
   }

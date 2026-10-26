@@ -212,7 +212,7 @@ app.delete("/api/schedule/edits/:dept/:day/:lesson_key/:cls", authMiddleware, re
 // === Replacements ===
 // Body: { day, items: [{dept, cls, lesson_no, lesson_key, time, subject, room, replacement_user_id}], absent_user_id, notify_user_ids: [int...] }
 app.post("/api/replacements", authMiddleware, async (req, res) => {
-  const { day, items, absent_user_id, notify_user_ids } = req.body || {};
+  const { day, items, absent_user_id, notify_user_ids, comment } = req.body || {};
   if (!day || !Array.isArray(items) || items.length === 0 || !absent_user_id) {
     return res.status(400).json({ error: "bad_request" });
   }
@@ -224,12 +224,13 @@ app.post("/api/replacements", authMiddleware, async (req, res) => {
     for (const it of items) {
       const r = await client.query(
         `INSERT INTO replacements
-         (day, time, dept, cls, lesson_no, lesson_key, absent_user_id, replacement_user_id, subject, room, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         (day, time, dept, cls, lesson_no, lesson_key, absent_user_id, replacement_user_id, subject, room, created_by, comment)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          RETURNING *`,
         [
           day, it.time, it.dept, it.cls, it.lesson_no, it.lesson_key,
-          absent_user_id, it.replacement_user_id, it.subject, it.room, req.userId
+          absent_user_id, it.replacement_user_id, it.subject, it.room, req.userId,
+          comment || null
         ]
       );
       created.push(r.rows[0]);
@@ -238,6 +239,7 @@ app.post("/api/replacements", authMiddleware, async (req, res) => {
     // Build notification messages
     const absent = await client.query("SELECT name FROM users WHERE id=$1", [absent_user_id]);
     const absentName = absent.rows[0]?.name || "—";
+    const commentSuffix = comment ? ` Причина: ${comment}.` : "";
 
     for (const rep of created) {
       const repl = await client.query("SELECT name FROM users WHERE id=$1", [rep.replacement_user_id]);
@@ -250,13 +252,13 @@ app.post("/api/replacements", authMiddleware, async (req, res) => {
         let title, body;
         if (user.id === absent_user_id) {
           title = `Замена на ${rep.day}`;
-          body = `Урок ${rep.lesson_no} (${rep.time || ''}) — ${rep.subject || ''}, ${rep.dept} ${rep.cls || ''} кл. Заменит: ${replName}.`;
+          body = `Урок ${rep.lesson_no} (${rep.time || ''}) — ${rep.subject || ''}, ${rep.dept} ${rep.cls || ''} кл. Заменит: ${replName}.${commentSuffix}`;
         } else if (user.id === rep.replacement_user_id) {
           title = `Вы назначены на замену — ${rep.day}`;
-          body = `Урок ${rep.lesson_no} (${rep.time || ''}) — ${rep.subject || ''}, ${rep.dept} ${rep.cls || ''} кл${rep.room ? ', каб ' + rep.room : ''}. Вместо: ${absentName}.`;
+          body = `Урок ${rep.lesson_no} (${rep.time || ''}) — ${rep.subject || ''}, ${rep.dept} ${rep.cls || ''} кл${rep.room ? ', каб ' + rep.room : ''}. Вместо: ${absentName}.${commentSuffix}`;
         } else {
           title = `Замена в отделении ${rep.dept} — ${rep.day}`;
-          body = `Урок ${rep.lesson_no} (${rep.time || ''}), ${rep.cls || ''} кл, ${rep.subject || ''}. ${absentName} → ${replName}.`;
+          body = `Урок ${rep.lesson_no} (${rep.time || ''}), ${rep.cls || ''} кл, ${rep.subject || ''}. ${absentName} → ${replName}.${commentSuffix}`;
         }
         await client.query(
           "INSERT INTO notifications (to_user_id, title, body, replacement_id) VALUES ($1,$2,$3,$4)",
