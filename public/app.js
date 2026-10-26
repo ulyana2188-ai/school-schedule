@@ -128,12 +128,38 @@ let state = {
   day: "Понедельник",
   view: "grid",
   classFilter: "all",
+  stage: null,          // 'elementary'|'middle'|'senior'|null (null = all stages)
   teacherFilter: null,  // highlight teacher in schedule
   historyFilters: { dept: "all", teacher: "", from: "", to: "" },
   myView: "today",
   myDay: "Понедельник",
   acsupFilter: { dept: "all" },
 };
+
+// Which stages exist per department
+const DEPT_STAGES = {
+  "Империал": ["elementary", "middle", "senior"],
+  "Пушкина":  ["elementary"],
+  "Кирова":   ["elementary", "middle", "senior"],
+  "Чкалова":  ["middle", "senior"],
+};
+const STAGE_LABELS = { elementary: "Начальная (1–4)", middle: "Средняя (5–9)", senior: "Старшая (10–11)" };
+const STAGE_GRADES = { elementary: [1,2,3,4], middle: [5,6,7,8,9], senior: [10,11] };
+
+function getClassGrade(cls) {
+  const m = String(cls).match(/^(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+function getClassStage(cls) {
+  const g = getClassGrade(cls);
+  if (g === null) return null;
+  if (g <= 4) return "elementary";
+  if (g <= 9) return "middle";
+  return "senior";
+}
+function deptHasMultipleStages(dept) {
+  return (DEPT_STAGES[dept] || []).length > 1;
+}
 let ABSENCES = [];
 let ACSUP = [];
 let ABSENCE_REQUESTS = [];
@@ -474,6 +500,10 @@ function renderGrid() {
   const isChkalova = state.dept === "Чкалова";
   let leftClasses = isChkalova ? ["5","6","7","8","9"] : dept.classes.slice();
   let rightClasses = isChkalova ? ["10","11"] : [];
+  if (state.stage) {
+    leftClasses = leftClasses.filter(c => getClassStage(c) === state.stage);
+    rightClasses = rightClasses.filter(c => getClassStage(c) === state.stage);
+  }
   if (state.classFilter !== "all") {
     leftClasses = leftClasses.filter(c => c === state.classFilter);
     rightClasses = rightClasses.filter(c => c === state.classFilter);
@@ -554,6 +584,10 @@ function renderWeek() {
   for (const c of CONFLICTS) conflictTeachers.add(c.teacher);
   let leftClasses = isChkalova ? ["5","6","7","8","9"] : dept.classes.slice();
   let rightClasses = isChkalova ? ["10","11"] : [];
+  if (state.stage) {
+    leftClasses = leftClasses.filter(c => getClassStage(c) === state.stage);
+    rightClasses = rightClasses.filter(c => getClassStage(c) === state.stage);
+  }
   if (state.classFilter !== "all") {
     leftClasses = leftClasses.filter(c => c === state.classFilter);
     rightClasses = rightClasses.filter(c => c === state.classFilter);
@@ -1201,15 +1235,44 @@ function populateClassFilter() {
   const sel = document.getElementById("classFilter");
   const dept = DATA[state.dept];
   if (!dept) return;
-  sel.innerHTML = [`<option value="all">Все классы</option>`].concat(dept.classes.map(c => `<option value="${c}" ${state.classFilter === c ? 'selected' : ''}>${c} класс</option>`)).join("");
-  sel.value = state.classFilter;
+  let classes = dept.classes.slice();
+  if (state.stage) classes = classes.filter(c => getClassStage(c) === state.stage);
+  sel.innerHTML = [`<option value="all">Все классы</option>`].concat(classes.map(c => `<option value="${c}" ${state.classFilter === c ? 'selected' : ''}>${c} класс</option>`)).join("");
+  if (state.classFilter !== "all" && !classes.includes(state.classFilter)) sel.value = "all";
+  else sel.value = state.classFilter;
 }
 function setClassFilter(v) { state.classFilter = v; render(); }
+
+function renderStageTabs() {
+  const el = document.getElementById("stageTabs");
+  if (!el) return;
+  const dept = state.dept;
+  const stages = DEPT_STAGES[dept] || [];
+  if (stages.length <= 1) { el.style.display = "none"; return; }
+  el.style.display = "flex";
+  el.innerHTML = [
+    `<button class="stage-tab ${state.stage === null ? 'active' : ''}" onclick="setStage(null)">Все ступени</button>`,
+    ...stages.map(s => `<button class="stage-tab ${state.stage === s ? 'active' : ''}" onclick="setStage('${s}')">${STAGE_LABELS[s]}</button>`)
+  ].join("");
+}
+
+function setStage(s) {
+  state.stage = s;
+  state.classFilter = "all";
+  populateClassFilter();
+  renderStageTabs();
+  render();
+}
+
 function setDept(d) {
   state.dept = d;
+  // If head has a fixed stage for this dept, apply it; else keep current unless it doesn't fit
   if (state.classFilter !== "all" && !DATA[d].classes.includes(state.classFilter)) state.classFilter = "all";
+  // Reset stage when switching dept (unless head auto-stage is handled on login)
+  if (!deptHasMultipleStages(d)) state.stage = null;
   populateClassFilter();
   renderDeptTabs();
+  renderStageTabs();
   renderStats();
   render();
 }
@@ -1302,6 +1365,15 @@ function initUI() {
 
   // Apply saved tab visibility preferences
   applyTabVisibilityPrefs();
+
+  // Auto-apply stage for heads who manage a specific stage
+  if (CURRENT_USER && CURRENT_USER.stage && CURRENT_USER.role === "head") {
+    state.stage = CURRENT_USER.stage;
+    // Set dept to head's dept
+    if (CURRENT_USER.dept && DATA[CURRENT_USER.dept]) state.dept = CURRENT_USER.dept;
+  }
+  renderStageTabs();
+  populateClassFilter();
 
   setSection("today"); // default
   renderUserChip();

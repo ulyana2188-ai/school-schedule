@@ -217,7 +217,14 @@ body {
 .section-btn:not(.active) .section-count { background: var(--bg); color: var(--text-muted); }
 
 /* DEPT TABS */
-.dept-tabs { display: flex; gap: 4px; background: var(--card); padding: 5px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow-x: auto; border: 1px solid var(--border); }
+.dept-tabs { display: flex; gap: 4px; background: var(--card); padding: 5px; border-radius: 12px; margin-bottom: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow-x: auto; border: 1px solid var(--border); }
+#stageTabs { display: flex; gap: 6px; padding: 8px 16px 4px; flex-wrap: wrap; margin-bottom: 4px; }
+#stageTabs[style*="display:none"], #stageTabs[style*="display: none"] { margin-bottom: 0; }
+.stage-tab { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); transition: all 0.15s; }
+.stage-tab:hover:not(.active) { background: var(--bg); color: var(--text); border-color: var(--ip-blue); }
+.stage-tab.active { background: var(--ip-blue); color: white; border-color: var(--ip-blue); box-shadow: 0 2px 6px rgba(59,130,246,0.3); }
+[data-theme="dark"] .stage-tab { background: #1e293b; }
+[data-theme="dark"] .stage-tab.active { background: #2563eb; }
 .dept-tab { flex: 1; min-width: 110px; padding: 9px 14px; border-radius: 8px; border: none; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-muted); transition: all 0.15s; }
 .dept-tab:hover:not(.active) { background: var(--bg); color: var(--text); }
 .dept-tab.active { background: var(--ip-cyan); color: white; box-shadow: 0 2px 6px rgba(0,176,224,0.3); }

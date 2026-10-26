@@ -2155,8 +2155,11 @@ async function bootstrap() {
     // Migrations
     await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(50)");
     await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS schedule_name VARCHAR(120)");
+    await db.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS stage VARCHAR(20)");
     // Promote admin-imperial to director role
     await db.query("UPDATE users SET role='director' WHERE email='admin-imperial' AND role='head'");
+    // Archive Клюева Е.С. (уволена)
+    await db.query("UPDATE users SET is_active=false WHERE name='Клюева Е.С.'");
     console.log("Schema OK.");
 
     // Auto-seed if users table is empty
@@ -2178,15 +2181,20 @@ async function bootstrap() {
 }
 
 // Promote specific people to head/director role on every startup.
-// This ensures Шестакова, Клюева, Шатунова, Муратова and Киняева У.В. always have correct access.
-const ALL_DEPTS = ["Империал", "Пушкина", "Чкалова", "Кирова"];
+const ALL_DEPTS_SEED = ["Империал", "Пушкина", "Чкалова", "Кирова"];
 const SPECIAL_HEADS_BOOTSTRAP = [
-  { name: "Шестакова И.А.", login: "shestakova-ia", depts: ["Империал"], dept: "Империал", title: "Руководитель отделения" },
-  { name: "Клюева Е.С.",    login: "klueva-es",    depts: ["Чкалова"],  dept: "Чкалова",  title: "Руководитель отделения" },
-  { name: "Шатунова В.А.",  login: "shatunova-va", depts: ["Пушкина"],  dept: "Пушкина",  title: "Руководитель отделения" },
-  { name: "Муратова В.Д.",  login: "muratova-vd",  depts: ["Кирова"],   dept: "Кирова",   title: "Администратор отделения" },
-  { name: "Шаболкина Л.А.", login: "shabolkina-la", depts: ["Кирова"],  dept: "Кирова",   title: "Руководитель отделения" },
-  { name: "Киняева У.В.",   login: "kinyaeva-uv",  depts: ALL_DEPTS,    dept: "Империал", title: "Директор школы" },
+  // Империал: два завуча — начальная и средняя школа
+  { name: "Шестакова Ирина Анатольевна", login: "shestakova-ia", depts: ["Империал"], dept: "Империал", title: "Завуч начальной школы (1-4 кл.)", stage: "elementary" },
+  { name: "Кленкина Ольга Валерьевна",   login: "klenkina-ov",   depts: ["Империал"], dept: "Империал", title: "Завуч средней школы (5-9 кл.)",  stage: "middle" },
+  // Пушкина: только начальная школа
+  { name: "Шатунова В.А.",  login: "shatunova-va", depts: ["Пушкина"], dept: "Пушкина", title: "Руководитель отделения", stage: "elementary" },
+  // Чкалова: средняя + старшая
+  { name: "Александрова Наталья Владимировна", login: "aleksandrova-nv", depts: ["Чкалова"], dept: "Чкалова", title: "Руководитель отделения" },
+  // Кирова: все ступени
+  { name: "Муратова В.Д.",  login: "muratova-vd",  depts: ["Кирова"], dept: "Кирова", title: "Администратор отделения" },
+  { name: "Шаболкина Л.А.", login: "shabolkina-la", depts: ["Кирова"], dept: "Кирова", title: "Руководитель отделения" },
+  // Киняева — директор всей школы
+  { name: "Киняева У.В.", login: "kinyaeva-uv", depts: ALL_DEPTS_SEED, dept: "Империал", title: "Директор школы" },
 ];
 
 async function ensureSpecialHeads() {
@@ -2198,8 +2206,8 @@ async function ensureSpecialHeads() {
     const ex = await db.query("SELECT id, role FROM users WHERE name = $1 LIMIT 1", [sh.name]);
     if (ex.rows.length > 0) {
       await db.query(
-        "UPDATE users SET role='head', dept=$1, depts=$2, title=$3 WHERE id=$4",
-        [sh.dept, sh.depts, sh.title || null, ex.rows[0].id]
+        "UPDATE users SET role='head', dept=$1, depts=$2, title=$3, stage=$4 WHERE id=$5",
+        [sh.dept, sh.depts, sh.title || null, sh.stage || null, ex.rows[0].id]
       );
       promoted++;
     } else {
@@ -2209,9 +2217,9 @@ async function ensureSpecialHeads() {
         login = sh.login + suffix++;
       }
       await db.query(
-        `INSERT INTO users (email, name, role, title, dept, depts, password_hash, must_change)
-         VALUES ($1, $2, 'head', $3, $4, $5, $6, TRUE)`,
-        [login, sh.name, sh.title || null, sh.dept, sh.depts, hash]
+        `INSERT INTO users (email, name, role, title, dept, depts, stage, password_hash, must_change)
+         VALUES ($1, $2, 'head', $3, $4, $5, $6, $7, TRUE)`,
+        [login, sh.name, sh.title || null, sh.dept, sh.depts, sh.stage || null, hash]
       );
       created++;
     }
