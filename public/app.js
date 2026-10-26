@@ -1216,9 +1216,11 @@ function initUI() {
     if (absTab) absTab.style.display = "none";
     const histTab2 = document.getElementById("historyTab");
     if (histTab2) histTab2.style.display = "none";
-    // Hide teacher count badge — not meaningful for teachers
+    // Hide teacher count badge and "Учителя" tab — not meaningful for teachers
     const tCount = document.getElementById("teachersCount");
     if (tCount) tCount.style.display = "none";
+    const teachersTab = document.getElementById("teachersTab");
+    if (teachersTab) teachersTab.style.display = "none";
   }
 
   setSection("today"); // default
@@ -1367,8 +1369,11 @@ function renderToday() {
   const today = todayDayName();
   const dateStr = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
 
+  const _greetHour = new Date().getHours();
+  const _greetWord = _greetHour < 12 ? "Доброе утро" : _greetHour < 17 ? "Добрый день" : "Добрый вечер";
+  const _firstName = escapeHtml((u.name || '').split(' ')[0] || u.name);
   let html = `<div class="today-greeting">
-    <h2>Привет, ${escapeHtml((u.name || '').split(' ')[1] || u.name)}!</h2>
+    <h2>${_greetWord}, ${_firstName}!</h2>
     <div class="day-of-week">Сегодня ${escapeHtml(dateStr)}</div>
   </div>`;
 
@@ -5389,8 +5394,8 @@ async function renderAvailability() {
 
   root.innerHTML = `
     <div style="padding:16px;">
-      <h2 style="margin:0 0 4px;font-size:1.2rem;">🗓 Моя доступность</h2>
-      <p style="margin:0 0 16px;color:#888;font-size:13px;">Отметьте слоты, когда учитель <strong>НЕ доступен</strong> для замены. Зелёный = доступен, красный = не доступен.</p>
+      <h2 style="margin:0 0 4px;font-size:1.2rem;">🗓 Когда я свободна для замены</h2>
+      <p style="margin:0 0 16px;color:#888;font-size:13px;">Отметьте уроки, на которые вы <strong>готовы выйти</strong> вместо коллеги. 🟢 — могу, 🔴 — не могу.</p>
 
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
         ${teacherSelector}
