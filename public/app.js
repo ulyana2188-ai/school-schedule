@@ -1,6 +1,3 @@
-// Direct Render backend URL — bypasses Cloudflare Worker to avoid CF rate limiting on import
-const RENDER_API = "https://intellekt-plus-schedule.onrender.com";
-
 // ============= CLIENT-SIDE XLS PARSER =============
 // Parses workbook using SheetJS (XLSX global from CDN) — same logic as server-side parseFullScheduleSheet
 function parseFullScheduleSheetClient(workbook) {
@@ -257,8 +254,7 @@ const API = {
             resolve({ classes: parsed.classes, total, days: Object.keys(parsed.schedule).length, _parsed: parsed });
             return;
           }
-          // POST parsed data as JSON directly to Render — bypass Cloudflare to avoid 429 rate limiting
-          const r = await fetch(RENDER_API + "/api/schedule/import-full-parsed", {
+          const r = await fetch("/api/schedule/import-full-parsed", {
             method: "POST",
             headers: { Authorization: "Bearer " + this.token, "Content-Type": "application/json" },
             body: JSON.stringify({ dept, data: parsed })
@@ -2291,32 +2287,62 @@ async function onImportFullFileChange(input) {
 async function doImportFull() {
   if (!_importFullFile && !_importFullParsedData) return;
   const dept = document.getElementById("importFullDept").value;
-  document.getElementById("importFullSubmit").disabled = true;
-  document.getElementById("importFullError").textContent = "";
+  const btn = document.getElementById("importFullSubmit");
+  const errEl = document.getElementById("importFullError");
+  btn.disabled = true;
+  btn.textContent = "Загрузка...";
+  errEl.textContent = "";
   try {
-    // If we already have parsed data from preview, send directly — no re-parsing needed
+    // Helper: POST parsed data with auto-retry on 429
+    async function postParsed(data) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const resp = await fetch("/api/schedule/import-full-parsed", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
+          body: JSON.stringify({ dept, data })
+        });
+        if (resp.status === 429) {
+          if (attempt < 2) {
+            await new Promise(res => setTimeout(res, 2000 * (attempt + 1)));
+            continue;
+          }
+          throw new Error("Сервер занят, попробуйте через минуту (429)");
+        }
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(d.details || d.error || `Ошибка сервера (HTTP ${resp.status})`);
+        return d;
+      }
+    }
+
     let r;
     if (_importFullParsedData) {
-      const resp = await fetch(RENDER_API + "/api/schedule/import-full-parsed", {
-        method: "POST",
-        headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
-        body: JSON.stringify({ dept, data: _importFullParsedData })
-      });
-      const d = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(d.details || d.error || `import_failed (HTTP ${resp.status})`);
-      r = d;
+      r = await postParsed(_importFullParsedData);
     } else {
-      r = await API.importFullSchedule(_importFullFile, dept, false);
+      // Re-parse file if parsed data was lost (e.g. after page refresh)
+      const reParsed = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+            const parsed = parseFullScheduleSheetClient(wb);
+            if (!parsed) reject(new Error("Не удалось распознать расписание"));
+            else resolve(parsed);
+          } catch(err) { reject(err); }
+        };
+        reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+        reader.readAsArrayBuffer(_importFullFile);
+      });
+      r = await postParsed(reParsed);
     }
+
     document.getElementById("importFullModal").classList.remove("show");
-    // Refresh data
     await reloadSchedule();
     setDept(dept);
-    // Show status banner
     showImportBanner(dept, r.total);
   } catch(e) {
-    document.getElementById("importFullError").textContent = "Ошибка: " + e.message;
-    document.getElementById("importFullSubmit").disabled = false;
+    errEl.textContent = "Ошибка: " + e.message;
+    btn.disabled = false;
+    btn.textContent = "Загрузить";
   }
 }
 
