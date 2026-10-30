@@ -247,6 +247,11 @@ body {
 .day-tab { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: white; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text); }
 .day-tab.active { background: var(--ip-blue); color: white; border-color: var(--ip-blue); }
 .toolbar .spacer { flex: 1; }
+/* Action buttons group — always stays on one row, never wraps internally */
+.toolbar-actions {
+  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+  flex-shrink: 0; margin-left: 6px;
+}
 .toolbar .view-switch { display: flex; gap: 4px; background: #F1F2F4; padding: 3px; border-radius: 7px; }
 .toolbar .view-switch button { background: transparent; border: none; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 5px; color: var(--text-muted); }
 .toolbar .view-switch button.active { background: white; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
@@ -670,6 +675,9 @@ body.edit-mode table.schedule td { position: relative; }
   .toolbar .spacer { display: none; }
   /* Buttons */
   .toolbar .btn.secondary { font-size: 11px; padding: 5px 8px; }
+  /* Action buttons: scrollable row on mobile */
+  .toolbar-actions { overflow-x: auto; scrollbar-width: none; margin-left: 0; }
+  .toolbar-actions::-webkit-scrollbar { display: none; }
 
   /* Grid */
   .grid-wrap { max-height: calc(100vh - 260px); border-radius: 8px; }

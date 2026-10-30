@@ -87,7 +87,7 @@ const API = {
       body: fd
     }).then(async r => {
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.details || d.error || "import_failed");
+      if (!r.ok) throw new Error(d.details || d.error || `import_failed (HTTP ${r.status})`);
       return d;
     });
   },
