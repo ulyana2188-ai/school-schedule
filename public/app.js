@@ -77,18 +77,26 @@ const API = {
   },
   // Full schedule import (replaces base schedule for dept)
   importFullSchedule(file, dept, preview) {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("dept", dept);
-    fd.append("preview", preview ? "true" : "false");
-    return fetch("/api/schedule/import-full", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + this.token },
-      body: fd
-    }).then(async r => {
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.details || d.error || `import_failed (HTTP ${r.status})`);
-      return d;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const bytes = new Uint8Array(e.target.result);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const b64 = btoa(binary);
+          const r = await fetch("/api/schedule/import-full", {
+            method: "POST",
+            headers: { Authorization: "Bearer " + this.token, "Content-Type": "application/json" },
+            body: JSON.stringify({ file_base64: b64, dept, preview: !!preview })
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.details || d.error || `import_failed (HTTP ${r.status})`);
+          resolve(d);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+      reader.readAsArrayBuffer(file);
     });
   },
   getScheduleOverrides() { return this.fetch("/api/schedule/overrides"); },
