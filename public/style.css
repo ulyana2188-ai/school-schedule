@@ -210,7 +210,7 @@ body {
   transition: max-height 0.25s ease, overflow 0.25s;
 }
 .section-nav.nav-collapsed {
-  max-height: 52px; overflow: hidden;
+  max-height: 40px; overflow: hidden;
 }
 .nav-toggle-btn { font-weight: 700 !important; }
 .section-btn {
@@ -643,7 +643,7 @@ body.edit-mode table.schedule td { position: relative; }
     flex-wrap: wrap; margin-bottom: 8px;
   }
   .section-nav.nav-collapsed {
-    max-height: 48px; overflow: hidden;
+    max-height: 32px; overflow: hidden;
   }
   .section-btn {
     padding: 7px 10px; font-size: 11px; font-weight: 600;
