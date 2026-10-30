@@ -1,3 +1,6 @@
+// Direct Render backend URL — bypasses Cloudflare Worker to avoid CF rate limiting on import
+const RENDER_API = "https://intellekt-plus-schedule.onrender.com";
+
 // ============= CLIENT-SIDE XLS PARSER =============
 // Parses workbook using SheetJS (XLSX global from CDN) — same logic as server-side parseFullScheduleSheet
 function parseFullScheduleSheetClient(workbook) {
@@ -254,8 +257,8 @@ const API = {
             resolve({ classes: parsed.classes, total, days: Object.keys(parsed.schedule).length, _parsed: parsed });
             return;
           }
-          // POST parsed data as JSON — no file upload, no multer, no 503
-          const r = await fetch("/api/schedule/import-full-parsed", {
+          // POST parsed data as JSON directly to Render — bypass Cloudflare to avoid 429 rate limiting
+          const r = await fetch(RENDER_API + "/api/schedule/import-full-parsed", {
             method: "POST",
             headers: { Authorization: "Bearer " + this.token, "Content-Type": "application/json" },
             body: JSON.stringify({ dept, data: parsed })
@@ -2294,7 +2297,7 @@ async function doImportFull() {
     // If we already have parsed data from preview, send directly — no re-parsing needed
     let r;
     if (_importFullParsedData) {
-      const resp = await fetch("/api/schedule/import-full-parsed", {
+      const resp = await fetch(RENDER_API + "/api/schedule/import-full-parsed", {
         method: "POST",
         headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
         body: JSON.stringify({ dept, data: _importFullParsedData })
