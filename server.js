@@ -926,10 +926,15 @@ app.get("/api/schedule/history", authMiddleware, async (req, res) => {
 // === Admin (head or director) ===
 const ALL_DEPTS = ["Империал","Пушкина","Чкалова","Кирова"];
 async function requireHead(req, res, next) {
-  const u = await getUserById(req.userId);
-  if (!u || (u.role !== "head" && u.role !== "director")) return res.status(403).json({ error: "forbidden" });
-  req.user = u;
-  next();
+  try {
+    const u = await getUserById(req.userId);
+    if (!u || (u.role !== "head" && u.role !== "director")) return res.status(403).json({ error: "forbidden" });
+    req.user = u;
+    next();
+  } catch (e) {
+    console.error("requireHead error:", e);
+    res.status(500).json({ error: "server_error", details: String(e.message) });
+  }
 }
 function getAllowedDepts(user) {
   if (user.role === "director") return ALL_DEPTS;
@@ -2337,6 +2342,15 @@ async function reconcileTeachers() {
   }
   if (renamed || merged) console.log(`Reconciliation: ${renamed} renamed, ${merged} merged.`);
 }
+
+// Global error handler — ensures all errors return JSON, never HTML
+// This catches uncaught errors from middleware (e.g. multer limits, DB errors)
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || String(err);
+  res.status(status).json({ error: "server_error", details: message });
+});
 
 bootstrap().then(() => {
   app.listen(PORT, () => {

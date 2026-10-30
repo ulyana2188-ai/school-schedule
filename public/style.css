@@ -202,6 +202,8 @@ body {
 
 /* SECTION NAV */
 .section-nav-wrap { position: relative; }
+/* When toggle btn is visible, leave room for it on the right */
+.section-nav-wrap.has-toggle { padding-right: 108px; }
 .section-nav {
   display: flex; gap: 6px; margin-bottom: 14px;
   flex-wrap: wrap;
@@ -630,6 +632,7 @@ body.edit-mode table.schedule td { position: relative; }
 
   /* Section nav: wrap + collapse on mobile same as desktop */
   .section-nav-wrap::after { display: none; }
+  .section-nav-wrap.has-toggle { padding-right: 90px; }
   .section-nav {
     gap: 5px; padding-bottom: 4px;
     flex-wrap: wrap; margin-bottom: 8px;

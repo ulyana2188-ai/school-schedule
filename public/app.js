@@ -1472,14 +1472,18 @@ function _isNavRole() {
 function initNavToggle() {
   const btn = document.getElementById("navToggleBtn");
   const nav = document.querySelector(".section-nav");
+  const wrap = document.querySelector(".section-nav-wrap");
   if (!btn || !nav) return;
   // Show toggle for head/director; also for teachers on small screens (many tabs)
   const isMobile = window.innerWidth <= 768;
   const visibleBtns = Array.from(nav.querySelectorAll(".section-btn:not(#navToggleBtn)")).filter(b => b.style.display !== "none");
   if (!_isNavRole() && !isMobile && visibleBtns.length <= 5) {
-    btn.style.display = "none"; nav.classList.remove("nav-collapsed"); return;
+    btn.style.display = "none";
+    if (wrap) wrap.classList.remove("has-toggle");
+    nav.classList.remove("nav-collapsed"); return;
   }
   btn.style.display = "";
+  if (wrap) wrap.classList.add("has-toggle");
   const expanded = (() => { try { return localStorage.getItem("ip_nav_expanded") === "1"; } catch(e) { return false; } })();
   if (expanded) { nav.classList.remove("nav-collapsed"); } else { nav.classList.add("nav-collapsed"); }
   _updateNavToggleBtn();
