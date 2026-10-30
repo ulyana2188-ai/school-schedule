@@ -909,6 +909,32 @@ app.post("/api/schedule/import-full", authMiddleware, requireHead, async (req, r
   }
 });
 
+// POST /api/schedule/import-full-parsed — receive pre-parsed schedule from client-side SheetJS
+app.post("/api/schedule/import-full-parsed", authMiddleware, requireHead, async (req, res) => {
+  const { dept, data } = req.body || {};
+  if (!data || !dept) return res.status(400).json({ error: "no_data" });
+  if (!data.classes || !data.schedule) return res.status(400).json({ error: "invalid_data", details: "Неверный формат данных расписания" });
+  const allowedDepts = getAllowedDepts(req.user);
+  if (!allowedDepts.includes(dept) && req.user.role !== "director")
+    return res.status(403).json({ error: "wrong_dept" });
+  try {
+    let total = 0;
+    for (const day of Object.values(data.schedule))
+      for (const ldata of Object.values(day))
+        total += Object.keys(ldata.classes).length;
+    await db.query(
+      `INSERT INTO schedule_overrides (dept, data, imported_by, imported_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (dept) DO UPDATE SET data=EXCLUDED.data, imported_by=EXCLUDED.imported_by, imported_at=NOW()`,
+      [dept, JSON.stringify(data), req.userId]
+    );
+    res.json({ ok: true, total, classes: data.classes });
+  } catch(e) {
+    console.error("Import parsed error:", e);
+    res.status(500).json({ error: "import_failed", details: String(e.message) });
+  }
+});
+
 // === Schedule history ===
 app.get("/api/schedule/history", authMiddleware, async (req, res) => {
   const { dept } = req.query;

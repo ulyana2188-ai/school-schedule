@@ -1,3 +1,164 @@
+// ============= CLIENT-SIDE XLS PARSER =============
+// Parses workbook using SheetJS (XLSX global from CDN) — same logic as server-side parseFullScheduleSheet
+function parseFullScheduleSheetClient(workbook) {
+  const DAYS_MAP = {
+    "понедельник":"Понедельник","вторник":"Вторник","среда":"Среда","четверг":"Четверг","пятница":"Пятница",
+    "пн":"Понедельник","вт":"Вторник","ср":"Среда","чт":"Четверг","пт":"Пятница",
+    "monday":"Понедельник","tuesday":"Вторник","wednesday":"Среда","thursday":"Четверг","friday":"Пятница",
+  };
+  const HEADER_KEYS = {
+    cls:["класс","группа","кл","class","group"],
+    day:["день","day","дата","weekday"],
+    lesson_no:["урок","№","номер","lesson","no","num","п/п","#","slot"],
+    time:["время","time","часы","час"],
+    subject:["предмет","дисциплина","subject","занятие","название"],
+    teacher:["учитель","педагог","преподаватель","teacher","ф.и.о","фио"],
+    room:["кабинет","ауд","room","аудитория","зал","каб"],
+  };
+  function matchHeader(val, synonyms) {
+    if (!val) return false;
+    const v = String(val).toLowerCase().trim();
+    return synonyms.some(s => v.includes(s));
+  }
+  function isClassName(v) {
+    if (!v) return false;
+    const s = String(v).trim();
+    return /^((\d{1,2})\s*[а-яёА-ЯЁa-zA-Z]?\s*(кл\.?|класс)?)$/.test(s) ||
+           /^(группа\s+)?(\d{1,2}[а-яёА-ЯЁ]?)$/.test(s);
+  }
+  function normalizeClass(v) { return String(v).trim().replace(/\s*(класс|кл\.?)\s*$/i,"").trim(); }
+  function detectDay(v) {
+    if (!v) return null;
+    return DAYS_MAP[String(v).toLowerCase().trim()] || null;
+  }
+  function detectLessonNo(v) {
+    if (v === null || v === undefined) return null;
+    const sv = String(v).trim();
+    if (/^\d{1,2}$/.test(sv)) { const n = parseInt(sv); if (n >= 1 && n <= 14) return n; }
+    return null;
+  }
+  function detectTime(v) {
+    if (!v) return null;
+    const sv = String(v).trim();
+    return /\d{1,2}[.:]\d{2}\s*[-—–]\s*\d{1,2}[.:]\d{2}/.test(sv) ? sv : null;
+  }
+  function extractSubjectTeacher(cellVal) {
+    if (!cellVal) return null;
+    const text = String(cellVal).trim();
+    if (!text) return null;
+    const lines = text.split(/\n|\\n/);
+    const firstLine = lines[0].trim();
+    const teacherMatch = text.match(/^(.+?)\s+([А-ЯЁ][а-яё]+(ов|ова|ев|ева|ин|ина|ый|ая|ий|ья)?\s+[А-ЯЁ]\.?\s*[А-ЯЁ]?\.?)\s*$/);
+    if (lines.length >= 2) return { subject: firstLine, teacher: lines.slice(1).map(l=>l.trim()).filter(Boolean).join(", ")||null };
+    else if (teacherMatch) return { subject: teacherMatch[1].trim(), teacher: teacherMatch[2].trim() };
+    return { subject: firstLine, teacher: null };
+  }
+  const classSet = new Set();
+  const lessons = [];
+  const XU = window.XLSX ? window.XLSX.utils : null;
+  if (!XU) return null;
+  for (const sheetName of workbook.SheetNames) {
+    const ws = workbook.Sheets[sheetName];
+    const rows = XU.sheet_to_json(ws, { header:1, defval:null });
+    if (!rows.length) continue;
+    const sheetDay = detectDay(sheetName);
+    let flatColMap = null;
+    for (let r = 0; r < Math.min(rows.length, 8); r++) {
+      const row = rows[r] || [];
+      if (row.every(c=>!c)) continue;
+      const found = {};
+      for (const [key, syns] of Object.entries(HEADER_KEYS)) {
+        for (let c = 0; c < row.length; c++) {
+          if (matchHeader(row[c], syns)) { found[key]=c; break; }
+        }
+      }
+      if (found.subject !== undefined && (found.cls !== undefined || found.day !== undefined)) {
+        flatColMap = found;
+        let lastDay = sheetDay, lastCls = null;
+        for (let i = r+1; i < rows.length; i++) {
+          const dr = rows[i];
+          if (!dr || dr.every(c=>!c)) continue;
+          if (!found.cls || !dr[found.cls]) {
+            const md = detectDay(dr[found.day!=null?found.day:0]);
+            if (md) { lastDay=md; continue; }
+          }
+          const clsRaw = found.cls!=null&&dr[found.cls]!=null ? normalizeClass(String(dr[found.cls]).trim()) : lastCls;
+          const dayRaw = found.day!=null&&dr[found.day]!=null ? detectDay(dr[found.day]) : lastDay;
+          const subjRaw = dr[found.subject]!=null ? String(dr[found.subject]).trim() : null;
+          if (!clsRaw||!dayRaw||!subjRaw) continue;
+          if (clsRaw) lastCls=clsRaw;
+          const lesson_no = found.lesson_no!=null ? detectLessonNo(dr[found.lesson_no]) : null;
+          const time = found.time!=null ? detectTime(dr[found.time]) : null;
+          const teacher = found.teacher!=null&&dr[found.teacher]!=null ? String(dr[found.teacher]).trim() : null;
+          const room = found.room!=null&&dr[found.room]!=null ? String(dr[found.room]).trim() : null;
+          classSet.add(clsRaw);
+          lessons.push({cls:clsRaw,day:dayRaw,lesson_no,time,subject:subjRaw,teacher:teacher||null,room:room||null});
+        }
+        break;
+      }
+    }
+    if (flatColMap) continue;
+    let classCols={}, currentDay=sheetDay, gridStarted=false;
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r]||[];
+      let classHeaderCount=0; const potentialCols={};
+      for (let c=0;c<row.length;c++) {
+        if (row[c]&&isClassName(String(row[c]).trim())) { potentialCols[c]=normalizeClass(String(row[c]).trim()); classHeaderCount++; }
+      }
+      if (classHeaderCount>=2) { Object.assign(classCols,potentialCols); gridStarted=true; continue; }
+      let dayFound=false;
+      for (let c=0;c<row.length;c++) { const d=detectDay(row[c]); if(d){currentDay=d;dayFound=true;break;} }
+      if (dayFound&&!Object.keys(classCols).length) continue;
+      let lessonNo=null,time=null;
+      for (let c=0;c<Math.min(row.length,6);c++) {
+        if (lessonNo===null){const n=detectLessonNo(row[c]);if(n!==null){lessonNo=n;continue;}}
+        if (time===null){const t=detectTime(row[c]);if(t){time=t;continue;}}
+      }
+      if (!currentDay||!Object.keys(classCols).length) continue;
+      if (lessonNo===null&&!gridStarted) continue;
+      for (const c in classCols) {
+        const ci=parseInt(c), cellVal=row[ci];
+        if (!cellVal) continue;
+        const parsed=extractSubjectTeacher(cellVal);
+        if (!parsed||!parsed.subject) continue;
+        classSet.add(classCols[c]);
+        lessons.push({cls:classCols[c],day:currentDay,lesson_no:lessonNo,time,subject:parsed.subject,teacher:parsed.teacher||null,room:null});
+      }
+    }
+    if (lessons.length===0) {
+      let scanDay=sheetDay;
+      for (let r=0;r<rows.length;r++) {
+        const row=rows[r]||[];
+        for (const cell of row){const d=detectDay(cell);if(d){scanDay=d;break;}}
+        if (!scanDay) continue;
+        for (let c=0;c<row.length-1;c++) {
+          if (!isClassName(row[c])) continue;
+          const cls=normalizeClass(String(row[c]).trim());
+          const nextVal=row[c+1];
+          if (!nextVal) continue;
+          const parsed=extractSubjectTeacher(nextVal);
+          if (!parsed||!parsed.subject) continue;
+          const lessonNo=r>0?detectLessonNo((rows[r-1]||[])[c]):null;
+          classSet.add(cls);
+          lessons.push({cls,day:scanDay,lesson_no:lessonNo,time:null,subject:parsed.subject,teacher:parsed.teacher,room:null});
+        }
+      }
+    }
+  }
+  if (!lessons.length) return null;
+  const classesArr=Array.from(classSet).sort((a,b)=>{const na=parseInt(a),nb=parseInt(b);return(!isNaN(na)&&!isNaN(nb))?na-nb:a.localeCompare(b,"ru");});
+  const schedule={};
+  for (const L of lessons) {
+    if (!L.day) continue;
+    if (!schedule[L.day]) schedule[L.day]={};
+    const timeClean=(L.time||"").replace(/[.:]/g,".").replace(/\s/g,"");
+    const lkey=`${L.lesson_no||"?"}|${timeClean}`;
+    if (!schedule[L.day][lkey]) schedule[L.day][lkey]={lesson_no:L.lesson_no||0,time:L.time||"",classes:{}};
+    schedule[L.day][lkey].classes[L.cls]={subject:L.subject,teacher:L.teacher,room:L.room};
+  }
+  return {classes:classesArr,schedule};
+}
+
 // ============= API CLIENT =============
 const API = {
   token: localStorage.getItem("ip_token") || null,
@@ -75,20 +236,29 @@ const API = {
       return d;
     });
   },
-  // Full schedule import (replaces base schedule for dept)
-  importFullSchedule(file, dept, preview) {
+  // Full schedule import — parses XLS in browser, sends only JSON to server
+  importFullSchedule(file, dept, isPreview) {
     return new Promise((resolve, reject) => {
+      if (typeof XLSX === "undefined") return reject(new Error("SheetJS не загружен, обновите страницу"));
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
-          const bytes = new Uint8Array(e.target.result);
-          let binary = "";
-          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-          const b64 = btoa(binary);
-          const r = await fetch("/api/schedule/import-full", {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+          const parsed = parseFullScheduleSheetClient(wb);
+          if (!parsed) throw new Error("Не удалось распознать расписание. Проверьте формат файла.");
+          let total = 0;
+          for (const day of Object.values(parsed.schedule))
+            for (const ldata of Object.values(day))
+              total += Object.keys(ldata.classes).length;
+          if (isPreview) {
+            resolve({ classes: parsed.classes, total, days: Object.keys(parsed.schedule).length, _parsed: parsed });
+            return;
+          }
+          // POST parsed data as JSON — no file upload, no multer, no 503
+          const r = await fetch("/api/schedule/import-full-parsed", {
             method: "POST",
             headers: { Authorization: "Bearer " + this.token, "Content-Type": "application/json" },
-            body: JSON.stringify({ file_base64: b64, dept, preview: !!preview })
+            body: JSON.stringify({ dept, data: parsed })
           });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(d.details || d.error || `import_failed (HTTP ${r.status})`);
@@ -2050,10 +2220,12 @@ async function importExcelFile(input) {
 // ============= FULL SCHEDULE IMPORT =============
 let _importFullFile = null;
 let _importFullPreviewData = null;
+let _importFullParsedData = null;
 
 async function openImportFullModal() {
   _importFullFile = null;
   _importFullPreviewData = null;
+  _importFullParsedData = null;
   document.getElementById("importFullFile").value = "";
   document.getElementById("importFullFileLabel").textContent = "Выбрать файл (.xlsx)";
   document.getElementById("importFullPreview").style.display = "none";
@@ -2102,6 +2274,7 @@ async function onImportFullFileChange(input) {
   try {
     const prev = await API.importFullSchedule(file, dept, true);
     _importFullPreviewData = prev;
+    _importFullParsedData = prev._parsed || null; // store for doImportFull
     const preview = document.getElementById("importFullPreview");
     preview.innerHTML = `✅ Распознано: <b>${prev.total} уроков</b>, ${prev.classes.length} классов (${prev.classes.join(", ")}), ${prev.days} дней недели`;
     preview.style.display = "";
@@ -2113,12 +2286,25 @@ async function onImportFullFileChange(input) {
 }
 
 async function doImportFull() {
-  if (!_importFullFile) return;
+  if (!_importFullFile && !_importFullParsedData) return;
   const dept = document.getElementById("importFullDept").value;
   document.getElementById("importFullSubmit").disabled = true;
   document.getElementById("importFullError").textContent = "";
   try {
-    const r = await API.importFullSchedule(_importFullFile, dept, false);
+    // If we already have parsed data from preview, send directly — no re-parsing needed
+    let r;
+    if (_importFullParsedData) {
+      const resp = await fetch("/api/schedule/import-full-parsed", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
+        body: JSON.stringify({ dept, data: _importFullParsedData })
+      });
+      const d = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(d.details || d.error || `import_failed (HTTP ${resp.status})`);
+      r = d;
+    } else {
+      r = await API.importFullSchedule(_importFullFile, dept, false);
+    }
     document.getElementById("importFullModal").classList.remove("show");
     // Refresh data
     await reloadSchedule();
