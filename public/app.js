@@ -2355,6 +2355,7 @@ async function doImportFull() {
 
     document.getElementById("importFullModal").classList.remove("show");
     await reloadSchedule();
+    setSection("schedule");
     setDept(dept);
     showImportBanner(dept, r.total);
   } catch(e) {
