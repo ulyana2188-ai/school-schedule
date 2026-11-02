@@ -43,7 +43,10 @@
       </div>
       <div class="login-row">
         <label>Пароль</label>
-        <input type="password" id="loginPassword" placeholder="••••••" autocomplete="current-password">
+        <div style="position:relative;">
+          <input type="password" id="loginPassword" placeholder="••••••" autocomplete="current-password" style="padding-right:40px;width:100%;box-sizing:border-box;">
+          <button type="button" onclick="toggleLoginPwd()" id="loginPwdToggle" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:var(--text-muted);font-size:16px;" title="Показать/скрыть пароль">👁</button>
+        </div>
       </div>
       <div class="login-hint">Первичный пароль для первого входа: <b>12345</b></div>
       <button class="btn btn-block" onclick="doLogin()">Войти</button>

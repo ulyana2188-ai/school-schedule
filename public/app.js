@@ -403,6 +403,13 @@ function showLogin() {
   document.getElementById("loginStep1").style.display = "";
   document.getElementById("loginStep2").style.display = "none";
 }
+function toggleLoginPwd() {
+  const inp = document.getElementById("loginPassword");
+  const btn = document.getElementById("loginPwdToggle");
+  if (inp.type === "password") { inp.type = "text"; btn.textContent = "🙈"; }
+  else { inp.type = "password"; btn.textContent = "👁"; }
+}
+
 async function doLogin() {
   const email = (document.getElementById("loginEmail").value || "").trim();
   const pwd = document.getElementById("loginPassword").value || "";
