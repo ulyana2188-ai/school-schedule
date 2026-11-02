@@ -3020,6 +3020,7 @@ async function reloadSchedule() {
   CONFLICTS = findConflicts();
   renderStats();
   renderConflictPanel();
+  render();
 }
 
 // ============= DRAG AND DROP =============
