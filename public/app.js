@@ -2304,18 +2304,18 @@ async function doImportFull() {
     async function postParsed(data) {
       // Step 1: wake server with lightweight ping (up to 3 attempts, 10s apart)
       btn.textContent = "Подключение к серверу...";
-      for (let w = 0; w < 3; w++) {
+      for (let w = 0; w < 6; w++) {
         try {
           const ping = await fetch("/api/health", { method: "GET" });
           if (ping.ok || ping.status === 401) break; // server is awake
           if (ping.status === 503 || ping.status === 502) {
-            if (w < 2) { btn.textContent = `Сервер просыпается... (${w + 1}/3)`; await new Promise(r => setTimeout(r, 10000)); continue; }
-            throw new Error("Сервер не отвечает. Попробуйте через минуту.");
+            if (w < 5) { btn.textContent = `Загрузка...`; await new Promise(r => setTimeout(r, 10000)); continue; }
+            throw new Error("Сервер не отвечает. Попробуйте ещё раз.");
           }
-          break; // any other status — server is up
+          break;
         } catch(e) {
           if (e.message.includes("Сервер")) throw e;
-          if (w < 2) { await new Promise(r => setTimeout(r, 10000)); continue; }
+          if (w < 5) { await new Promise(r => setTimeout(r, 10000)); continue; }
           throw new Error("Нет соединения с сервером. Проверьте интернет.");
         }
       }
