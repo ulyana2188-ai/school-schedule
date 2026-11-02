@@ -270,6 +270,16 @@
           <option value="cross">Кросс-отделение сначала</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--text-muted);">Отделение:</span>
+        <select id="teacherDeptFilter" onchange="renderAllTeachers()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:white;">
+          <option value="">Все отделения</option>
+          <option value="Империал">Империал</option>
+          <option value="Пушкина">Пушкина</option>
+          <option value="Чкалова">Чкалова</option>
+          <option value="Кирова">Кирова</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -727,6 +737,6 @@
   </div>
 </div>
 
-<script src="/app.js?v=20261102"></script>
+<script src="/app.js?v=20261102b"></script>
 </body>
 </html>

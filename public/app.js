@@ -824,6 +824,7 @@ function renderWeek() {
 function renderAllTeachers() {
   const search = (document.getElementById("teacherSearch")?.value || "").toLowerCase().trim();
   const sortMode = document.getElementById("teacherSort")?.value || "hours_desc";
+  const deptFilter = document.getElementById("teacherDeptFilter")?.value || "";
   let names = Object.keys(ALL_TEACHERS);
   if (search) {
     names = names.filter(n => {
@@ -831,6 +832,9 @@ function renderAllTeachers() {
       const subjs = Object.keys(ALL_TEACHERS[n].subjectHours).join(" ").toLowerCase();
       return subjs.includes(search);
     });
+  }
+  if (deptFilter) {
+    names = names.filter(n => (ALL_TEACHERS[n].hoursByDept[deptFilter] || 0) > 0);
   }
   names.sort((a, b) => {
     const A = ALL_TEACHERS[a], B = ALL_TEACHERS[b];
