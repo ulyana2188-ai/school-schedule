@@ -2300,19 +2300,28 @@ async function doImportFull() {
   btn.textContent = "Загрузка...";
   errEl.textContent = "";
   try {
-    // Helper: POST parsed data with auto-retry on 429
+    // Helper: POST parsed data with auto-retry on 429/503
     async function postParsed(data) {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      const maxAttempts = 5;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (attempt > 0) {
+          const delay = resp503 ? 8000 : 2000 * attempt;
+          btn.textContent = `Загрузка... (попытка ${attempt + 1})`;
+          await new Promise(res => setTimeout(res, delay));
+        }
+        let resp503 = false;
         const resp = await fetch("/api/schedule/import-full-parsed", {
           method: "POST",
           headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
           body: JSON.stringify({ dept, data })
         });
+        if (resp.status === 503 || resp.status === 502) {
+          resp503 = true;
+          if (attempt < maxAttempts - 1) continue;
+          throw new Error("Сервер недоступен (503). Подождите минуту и попробуйте снова.");
+        }
         if (resp.status === 429) {
-          if (attempt < 2) {
-            await new Promise(res => setTimeout(res, 2000 * (attempt + 1)));
-            continue;
-          }
+          if (attempt < maxAttempts - 1) continue;
           throw new Error("Сервер занят, попробуйте через минуту (429)");
         }
         const d = await resp.json().catch(() => ({}));
