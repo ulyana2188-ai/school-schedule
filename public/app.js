@@ -537,7 +537,7 @@ function buildAllTeachersData() {
           const items = info.groups ? info.groups : [info];
           for (const it of items) {
             if (!it.teacher) continue;
-            const t = it.teacher.trim();
+            const t = norm(it.teacher);
             if (!t) continue;
             if (!out[t]) out[t] = { hoursByDept: {}, subjectHours: {}, subjectByDept: {}, classes: new Set(), total: 0 };
             const rec = out[t];
@@ -570,7 +570,7 @@ function findConflicts() {
             const info = ld.classes[cls];
             const items = info.groups ? info.groups : [info];
             for (const it of items) {
-              if (it.teacher && it.teacher.trim() === teacher) {
+              if (it.teacher && it.teacher.replace(/\s+/g," ").trim() === teacher) {
                 slots.push({ dept, day, time: ld.time, lesson_no: ld.lesson_no, cls });
               }
             }
@@ -1175,7 +1175,7 @@ function teacherLessonsOnDay(teacherName, day) {
         const info = ld.classes[cls];
         const items = info.groups ? info.groups : [info];
         for (const it of items) {
-          if (it.teacher && it.teacher.trim() === teacherName) {
+          if (it.teacher && it.teacher.replace(/\s+/g," ").trim() === teacherName) {
             result.push({ dept, lessonKey: lkey, lesson_no: ld.lesson_no, time: ld.time, cls, subject: it.subject, room: it.room || info.room });
           }
         }
@@ -1196,7 +1196,7 @@ function isTeacherBusyAt(teacherName, day, time) {
       for (const cls in ld.classes) {
         const info = ld.classes[cls];
         const items = info.groups ? info.groups : [info];
-        for (const it of items) { if (it.teacher && it.teacher.trim() === teacherName) return true; }
+        for (const it of items) { if (it.teacher && it.teacher.replace(/\s+/g," ").trim() === teacherName) return true; }
       }
     }
   }
@@ -1842,7 +1842,7 @@ function findUserLessonsToday(userName, day) {
         const info = ld.classes[cls];
         const items = info.groups ? info.groups : [info];
         for (const it of items) {
-          if (it.teacher && it.teacher.trim() === userName) {
+          if (it.teacher && it.teacher.replace(/\s+/g," ").trim() === userName) {
             result.push({ dept, time: ld.time, lesson_no: ld.lesson_no, cls, subject: it.subject, room: it.room || info.room });
           }
         }
@@ -2421,7 +2421,7 @@ function teacherWeekSchedule(teacherName) {
           const info = ld.classes[cls];
           const items = info.groups ? info.groups : [info];
           for (const it of items) {
-            if (it.teacher && it.teacher.trim() === teacherName) {
+            if (it.teacher && it.teacher.replace(/\s+/g," ").trim() === teacherName) {
               out[day].push({ dept, time: ld.time, lesson_no: ld.lesson_no, cls, subject: it.subject, room: it.room || info.room });
             }
           }
@@ -2934,7 +2934,7 @@ function bestRoomForTeacherSubject(teacherName, subject, dept) {
         const items = info.groups ? info.groups : [info];
         for (const it of items) {
           if (!it.teacher || !it.subject) continue;
-          if (it.teacher.trim() !== teacherName) continue;
+          if (it.teacher.replace(/\s+/g," ").trim() !== teacherName) continue;
           if (it.subject.trim().toLowerCase() !== subject.toLowerCase()) continue;
           const r = it.room || info.room;
           if (r) counts[r] = (counts[r] || 0) + 1;
@@ -3247,7 +3247,7 @@ async function onCellDrop(e) {
           const info = ld.classes[cls];
           const items = info.groups ? info.groups : [info];
           for (const it of items) {
-            if (it.teacher && it.teacher.trim() === movedTeacher) {
+            if (it.teacher && it.teacher.replace(/\s+/g," ").trim() === movedTeacher) {
               // Same as source? skip
               if (dept === _dragSrc.dept && tgt.day === _dragSrc.day && lkey === _dragSrc.lkey && cls === _dragSrc.cls) continue;
               // Same as target? this is the cell we're replacing, swap will handle
