@@ -5791,9 +5791,10 @@ function exportSchedulePDF() {
 <meta charset="utf-8">
 <title>${title}</title>
 <style>
-  body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; color: #111; }
+  body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   h1 { font-size: 16px; margin-bottom: 4px; }
   .sub { font-size: 11px; color: #666; margin-bottom: 16px; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   @media print {
     @page { size: A4 landscape; margin: 10mm; }
     button { display: none; }
