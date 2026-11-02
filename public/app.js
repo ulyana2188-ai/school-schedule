@@ -2300,35 +2300,37 @@ async function doImportFull() {
   btn.textContent = "Загрузка...";
   errEl.textContent = "";
   try {
-    // Helper: POST parsed data with auto-retry on 429/503
+    // Helper: wake server first, then POST once
     async function postParsed(data) {
-      const maxAttempts = 5;
-      let lastWas503 = false;
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        if (attempt > 0) {
-          const delay = lastWas503 ? 8000 : 2000 * attempt;
-          btn.textContent = `Загрузка... (попытка ${attempt + 1})`;
-          await new Promise(res => setTimeout(res, delay));
+      // Step 1: wake server with lightweight ping (up to 3 attempts, 10s apart)
+      btn.textContent = "Подключение к серверу...";
+      for (let w = 0; w < 3; w++) {
+        try {
+          const ping = await fetch("/api/health", { method: "GET" });
+          if (ping.ok || ping.status === 401) break; // server is awake
+          if (ping.status === 503 || ping.status === 502) {
+            if (w < 2) { btn.textContent = `Сервер просыпается... (${w + 1}/3)`; await new Promise(r => setTimeout(r, 10000)); continue; }
+            throw new Error("Сервер не отвечает. Попробуйте через минуту.");
+          }
+          break; // any other status — server is up
+        } catch(e) {
+          if (e.message.includes("Сервер")) throw e;
+          if (w < 2) { await new Promise(r => setTimeout(r, 10000)); continue; }
+          throw new Error("Нет соединения с сервером. Проверьте интернет.");
         }
-        const resp = await fetch("/api/schedule/import-full-parsed", {
-          method: "POST",
-          headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
-          body: JSON.stringify({ dept, data })
-        });
-        if (resp.status === 503 || resp.status === 502) {
-          lastWas503 = true;
-          if (attempt < maxAttempts - 1) continue;
-          throw new Error("Сервер недоступен (503). Подождите минуту и попробуйте снова.");
-        }
-        lastWas503 = false;
-        if (resp.status === 429) {
-          if (attempt < maxAttempts - 1) continue;
-          throw new Error("Сервер занят, попробуйте через минуту (429)");
-        }
-        const d = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(d.details || d.error || `Ошибка сервера (HTTP ${resp.status})`);
-        return d;
       }
+      // Step 2: send import once
+      btn.textContent = "Сохранение расписания...";
+      const resp = await fetch("/api/schedule/import-full-parsed", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
+        body: JSON.stringify({ dept, data })
+      });
+      if (resp.status === 503 || resp.status === 502) throw new Error("Сервер недоступен. Подождите минуту и попробуйте снова.");
+      if (resp.status === 429) throw new Error("Слишком много запросов. Подождите 2 минуты и попробуйте снова.");
+      const d = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(d.details || d.error || `Ошибка сервера (HTTP ${resp.status})`);
+      return d;
     }
 
     let r;
