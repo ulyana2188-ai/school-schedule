@@ -595,7 +595,8 @@ function findConflicts() {
 // ============= RENDER =============
 function renderDeptTabs() {
   const root = document.getElementById("deptTabs");
-  root.innerHTML = DEPTS.map(d => {
+  const visible = getVisibleDepts();
+  root.innerHTML = visible.map(d => {
     const tCls = d === "Пушкина" ? "t-pushkina" : d === "Чкалова" ? "t-chkalova" : d === "Кирова" ? "t-kirova" : "t-imperial";
     const cls = "dept-tab " + tCls + (d === state.dept ? " active" : "");
     const meta = DATA[d];
@@ -1539,7 +1540,8 @@ function initUI() {
     if (tCount) tCount.style.display = "none";
     const teachersTab = document.getElementById("teachersTab");
     if (teachersTab) teachersTab.style.display = "none";
-    // Show "Когда я свободна" for teachers so they fill their own availability
+    // Hide общее расписание по отделениям — учитель видит только своё
+    document.querySelectorAll('[data-section="schedule"]').forEach(el => el.style.display = "none");
   }
 
   // Also hide availability tab for heads — it's teacher-specific
@@ -1559,8 +1561,11 @@ function initUI() {
   // Auto-apply stage for heads who manage a specific stage
   if (CURRENT_USER && CURRENT_USER.stage && CURRENT_USER.role === "head") {
     state.stage = CURRENT_USER.stage;
-    // Set dept to head's dept
-    if (CURRENT_USER.dept && DATA[CURRENT_USER.dept]) state.dept = CURRENT_USER.dept;
+  }
+  // Set initial dept to first visible dept for this user
+  {
+    const vis = getVisibleDepts();
+    if (vis.length > 0 && !vis.includes(state.dept)) state.dept = vis[0];
   }
   renderStageTabs();
   populateClassFilter();
@@ -2667,6 +2672,21 @@ function getMyAllowedDepts() {
   if (CURRENT_USER.depts && CURRENT_USER.depts.length > 0) return CURRENT_USER.depts;
   if (CURRENT_USER.dept) return [CURRENT_USER.dept];
   return [];
+}
+// Какие отделения ВИДИТ пользователь в расписании:
+// - директор → все
+// - завуч Пушкина → только Пушкина
+// - остальные завучи → все кроме Пушкина
+// - учителя → [] (видят только своё личное расписание, не отделения)
+function getVisibleDepts() {
+  if (!CURRENT_USER) return DEPTS.filter(d => d !== "Пушкина");
+  if (CURRENT_USER.role === "director") return DEPTS;
+  if (CURRENT_USER.role === "head") {
+    const my = getMyAllowedDepts();
+    if (my.includes("Пушкина")) return ["Пушкина"];
+    return DEPTS.filter(d => d !== "Пушкина");
+  }
+  return []; // учителя не видят табы отделений
 }
 function canEditDept(dept) {
   const allowed = getMyAllowedDepts();
