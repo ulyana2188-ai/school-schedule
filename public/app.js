@@ -2303,23 +2303,24 @@ async function doImportFull() {
     // Helper: POST parsed data with auto-retry on 429/503
     async function postParsed(data) {
       const maxAttempts = 5;
+      let lastWas503 = false;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
-          const delay = resp503 ? 8000 : 2000 * attempt;
+          const delay = lastWas503 ? 8000 : 2000 * attempt;
           btn.textContent = `Загрузка... (попытка ${attempt + 1})`;
           await new Promise(res => setTimeout(res, delay));
         }
-        let resp503 = false;
         const resp = await fetch("/api/schedule/import-full-parsed", {
           method: "POST",
           headers: { Authorization: "Bearer " + API.token, "Content-Type": "application/json" },
           body: JSON.stringify({ dept, data })
         });
         if (resp.status === 503 || resp.status === 502) {
-          resp503 = true;
+          lastWas503 = true;
           if (attempt < maxAttempts - 1) continue;
           throw new Error("Сервер недоступен (503). Подождите минуту и попробуйте снова.");
         }
+        lastWas503 = false;
         if (resp.status === 429) {
           if (attempt < maxAttempts - 1) continue;
           throw new Error("Сервер занят, попробуйте через минуту (429)");
