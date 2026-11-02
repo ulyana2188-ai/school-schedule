@@ -151,8 +151,7 @@ function parseFullScheduleSheetClient(workbook) {
   for (const L of lessons) {
     if (!L.day) continue;
     if (!schedule[L.day]) schedule[L.day]={};
-    const timeClean=(L.time||"").replace(/[.:]/g,".").replace(/\s/g,"");
-    const lkey=`${L.lesson_no||"?"}|${timeClean}`;
+    const lkey=`L${L.lesson_no||0}`;
     if (!schedule[L.day][lkey]) schedule[L.day][lkey]={lesson_no:L.lesson_no||0,time:L.time||"",classes:{}};
     schedule[L.day][lkey].classes[L.cls]={subject:L.subject,teacher:L.teacher,room:L.room};
   }
