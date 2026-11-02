@@ -673,6 +673,7 @@ function renderGrid() {
   const lkeys = Object.keys(sched).sort((a, b) => {
     const ma = a.match(/^([LR]?)(\d+)/);
     const mb = b.match(/^([LR]?)(\d+)/);
+    if (!ma || !mb) return 0;
     const sa = ma[1] === 'R' ? 1 : 0;
     const sb = mb[1] === 'R' ? 1 : 0;
     if (sa !== sb) return sa - sb;
