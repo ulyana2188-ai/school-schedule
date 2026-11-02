@@ -125,9 +125,28 @@ app.patch("/api/me", authMiddleware, async (req, res) => {
 
 // === Accounts list ===
 app.get("/api/accounts", authMiddleware, async (req, res) => {
-  const r = await db.query(
-    "SELECT id, email, name, role, title, dept, depts, subjects, COALESCE(is_active, TRUE) as is_active FROM users ORDER BY role DESC, name"
-  );
+  const me = await getUserById(req.userId);
+  let r;
+  if (me && me.role === "head") {
+    // Завуч видит только учителей своего отделения
+    const myDepts = getAllowedDepts(me);
+    r = await db.query(
+      "SELECT id, email, name, role, title, dept, depts, subjects, COALESCE(is_active, TRUE) as is_active FROM users ORDER BY role DESC, name"
+    );
+    r = { rows: r.rows.filter(u => {
+      if (u.role === "director") return false; // не показываем директора
+      if (u.role === "head" && u.id !== me.id) return false; // не показываем других завучей
+      if (u.role === "teacher") {
+        const uDepts = (u.depts && u.depts.length > 0) ? u.depts : (u.dept ? [u.dept] : []);
+        return uDepts.some(d => myDepts.includes(d));
+      }
+      return false;
+    })};
+  } else {
+    r = await db.query(
+      "SELECT id, email, name, role, title, dept, depts, subjects, COALESCE(is_active, TRUE) as is_active FROM users ORDER BY role DESC, name"
+    );
+  }
   res.json({ accounts: r.rows });
 });
 
@@ -970,8 +989,15 @@ function getAllowedDepts(user) {
 
 // Create a new user
 app.post("/api/admin/users", authMiddleware, requireHead, async (req, res) => {
-  const { email, name, role, title, dept, depts, subjects } = req.body || {};
+  let { email, name, role, title, dept, depts, subjects } = req.body || {};
   if (!email || !name) return res.status(400).json({ error: "email_name_required" });
+  // Завуч может создавать только учителей своего отделения
+  if (req.user.role === "head") {
+    role = "teacher";
+    const myDepts = getAllowedDepts(req.user);
+    depts = myDepts;
+    dept = myDepts[0] || null;
+  }
   const hash = await bcrypt.hash(process.env.DEFAULT_PASSWORD || "12345", 10);
   try {
     const r = await db.query(
@@ -989,6 +1015,16 @@ app.post("/api/admin/users", authMiddleware, requireHead, async (req, res) => {
 // Edit user
 app.patch("/api/admin/users/:id", authMiddleware, requireHead, async (req, res) => {
   const id = parseInt(req.params.id);
+  // Завуч может редактировать только учителей своего отделения
+  if (req.user.role === "head") {
+    const target = await db.query("SELECT * FROM users WHERE id=$1", [id]);
+    if (!target.rows[0]) return res.status(404).json({ error: "not_found" });
+    const t = target.rows[0];
+    if (t.role !== "teacher") return res.status(403).json({ error: "forbidden" });
+    const myDepts = getAllowedDepts(req.user);
+    const tDepts = (t.depts && t.depts.length > 0) ? t.depts : (t.dept ? [t.dept] : []);
+    if (!tDepts.some(d => myDepts.includes(d))) return res.status(403).json({ error: "forbidden" });
+  }
   const { email, name, role, title, dept, depts, subjects } = req.body || {};
   const fields = [], values = [];
   if (email != null)    { fields.push(`email=$${fields.length+1}`);    values.push(email.trim().toLowerCase()); }
@@ -1018,17 +1054,42 @@ app.post("/api/admin/users/:id/reset-password", authMiddleware, requireHead, asy
 
 // Archive (deactivate) user — preserves history
 app.post("/api/admin/users/:id/archive", authMiddleware, requireHead, async (req, res) => {
-  await db.query("UPDATE users SET is_active=FALSE WHERE id=$1", [parseInt(req.params.id)]);
+  const id = parseInt(req.params.id);
+  if (req.user.role === "head") {
+    const t = await db.query("SELECT * FROM users WHERE id=$1", [id]);
+    if (!t.rows[0] || t.rows[0].role !== "teacher") return res.status(403).json({ error: "forbidden" });
+    const myDepts = getAllowedDepts(req.user);
+    const tDepts = (t.rows[0].depts && t.rows[0].depts.length > 0) ? t.rows[0].depts : (t.rows[0].dept ? [t.rows[0].dept] : []);
+    if (!tDepts.some(d => myDepts.includes(d))) return res.status(403).json({ error: "forbidden" });
+  }
+  await db.query("UPDATE users SET is_active=FALSE WHERE id=$1", [id]);
   res.json({ ok: true });
 });
 // Restore (reactivate) user
 app.post("/api/admin/users/:id/restore", authMiddleware, requireHead, async (req, res) => {
-  await db.query("UPDATE users SET is_active=TRUE WHERE id=$1", [parseInt(req.params.id)]);
+  const id = parseInt(req.params.id);
+  if (req.user.role === "head") {
+    const t = await db.query("SELECT * FROM users WHERE id=$1", [id]);
+    if (!t.rows[0] || t.rows[0].role !== "teacher") return res.status(403).json({ error: "forbidden" });
+    const myDepts = getAllowedDepts(req.user);
+    const tDepts = (t.rows[0].depts && t.rows[0].depts.length > 0) ? t.rows[0].depts : (t.rows[0].dept ? [t.rows[0].dept] : []);
+    if (!tDepts.some(d => myDepts.includes(d))) return res.status(403).json({ error: "forbidden" });
+  }
+  await db.query("UPDATE users SET is_active=TRUE WHERE id=$1", [id]);
   res.json({ ok: true });
 });
 // Hard delete — only for users with no history (no replacements)
 app.delete("/api/admin/users/:id", authMiddleware, requireHead, async (req, res) => {
   const id = parseInt(req.params.id);
+  if (req.user.role === "head") {
+    const target = await db.query("SELECT * FROM users WHERE id=$1", [id]);
+    if (!target.rows[0]) return res.status(404).json({ error: "not_found" });
+    const t = target.rows[0];
+    if (t.role !== "teacher") return res.status(403).json({ error: "forbidden" });
+    const myDepts = getAllowedDepts(req.user);
+    const tDepts = (t.depts && t.depts.length > 0) ? t.depts : (t.dept ? [t.dept] : []);
+    if (!tDepts.some(d => myDepts.includes(d))) return res.status(403).json({ error: "forbidden" });
+  }
   try {
     // Check for history
     const hist = await db.query(
