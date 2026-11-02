@@ -2372,6 +2372,24 @@ async function reconcileTeachers() {
 
 // Global error handler — ensures all errors return JSON, never HTML
 // This catches uncaught errors from middleware (e.g. multer limits, DB errors)
+// Temporary password reset for director account
+// GET /api/reset-director?secret=intellekt2024
+app.get("/api/reset-director", async (req, res) => {
+  if (req.query.secret !== "intellekt2024") return res.status(403).json({ error: "forbidden" });
+  try {
+    const bcrypt = require("bcryptjs");
+    const hash = await bcrypt.hash("admin123", 10);
+    const r = await db.query(
+      "UPDATE users SET password_hash=$1, must_change=FALSE WHERE email='kinyaeva-uv' RETURNING id, name",
+      [hash]
+    );
+    if (r.rowCount === 0) return res.status(404).json({ error: "user not found" });
+    res.json({ ok: true, msg: "Пароль сброшен. Новый пароль: admin123", user: r.rows[0].name });
+  } catch(e) {
+    res.status(500).json({ error: String(e.message) });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   const status = err.status || err.statusCode || 500;
