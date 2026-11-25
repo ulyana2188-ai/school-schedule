@@ -2295,18 +2295,6 @@ async function bootstrap() {
       await reconcileTeachers();
     }
     await ensureSpecialHeads();
-    // One-time: reset password for Шатунова В.А. — remove after next deploy
-    await (async () => {
-      try {
-        const hash = await bcrypt.hash(process.env.DEFAULT_PASSWORD || "12345", 10);
-        const r = await db.query(
-          "UPDATE users SET password_hash=$1, must_change=TRUE WHERE name=$2 RETURNING id, email",
-          [hash, "Шатунова В.А."]
-        );
-        if (r.rowCount > 0) console.log(`[startup] Reset password for Шатунова В.А. → login: ${r.rows[0].email}`);
-        else console.log("[startup] Шатунова В.А. not found in DB — check name spelling");
-      } catch(e) { console.error("[startup] resetPwd error:", e); }
-    })();
   } catch (e) {
     console.error("Bootstrap failed:", e);
   }
