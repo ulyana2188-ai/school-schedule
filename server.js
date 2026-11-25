@@ -2432,20 +2432,19 @@ async function reconcileTeachers() {
 }
 
 // Global error handler — ensures all errors return JSON, never HTML
-// This catches uncaught errors from middleware (e.g. multer limits, DB errors)
-// Temporary password reset for director account
-// GET /api/reset-director?secret=intellekt2024
-app.get("/api/reset-director", async (req, res) => {
-  if (req.query.secret !== "intellekt2024") return res.status(403).json({ error: "forbidden" });
+// TEMP: single-use reset by login — remove after use
+app.get("/api/temp-reset-by-login", async (req, res) => {
+  if (req.query.secret !== "RESET_XK9_2024") return res.status(403).json({ error: "forbidden" });
+  const login = req.query.login;
+  if (!login) return res.status(400).json({ error: "login required" });
   try {
-    const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("admin123", 10);
+    const hash = await bcrypt.hash(process.env.DEFAULT_PASSWORD || "12345", 10);
     const r = await db.query(
-      "UPDATE users SET password_hash=$1, must_change=FALSE WHERE email='kinyaeva-uv' RETURNING id, name",
-      [hash]
+      "UPDATE users SET password_hash=$1, must_change=TRUE WHERE email=$2 RETURNING id, name, email",
+      [hash, login]
     );
-    if (r.rowCount === 0) return res.status(404).json({ error: "user not found" });
-    res.json({ ok: true, msg: "Пароль сброшен. Новый пароль: admin123", user: r.rows[0].name });
+    if (r.rowCount === 0) return res.status(404).json({ error: "user not found: " + login });
+    res.json({ ok: true, user: r.rows[0] });
   } catch(e) {
     res.status(500).json({ error: String(e.message) });
   }

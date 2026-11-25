@@ -2056,11 +2056,20 @@ function renderAdmin() {
   const archived = ACCOUNTS.filter(a => a.is_active === false || a.is_active === "false" || a.is_active === 0);
   const shown = _adminShowArchived ? archived : active;
 
+  // Count unique names per status
+  function uniqueCount(list) {
+    const names = new Set();
+    for (const a of list) names.add(a.role !== "teacher" ? "__" + a.id : a.name.trim());
+    return names.size;
+  }
+  const activeUniq = uniqueCount(active);
+  const archivedUniq = uniqueCount(archived);
+
   let html = `<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
     <h3 style="margin:0;">Сотрудники школы</h3>
     <div class="view-switch" style="margin-left:8px;">
-      <button class="${!_adminShowArchived?'active':''}" onclick="_adminShowArchived=false;renderAdmin()">Активные (${active.length})</button>
-      <button class="${_adminShowArchived?'active':''}" onclick="_adminShowArchived=true;renderAdmin()">Уволенные (${archived.length})</button>
+      <button class="${!_adminShowArchived?'active':''}" onclick="_adminShowArchived=false;renderAdmin()">Активные (${activeUniq})</button>
+      <button class="${_adminShowArchived?'active':''}" onclick="_adminShowArchived=true;renderAdmin()">Уволенные (${archivedUniq})</button>
     </div>
     <div style="flex:1;"></div>
     <label class="btn secondary" style="cursor:pointer;margin:0;">
@@ -2080,7 +2089,17 @@ function renderAdmin() {
     <div class="admin-row header-row">
       <div></div><div>ФИО</div><div>Логин</div><div>Должность</div><div>Отделения</div><div></div>
     </div>`;
-    const sorted = shown.slice().sort((a,b) => (a.role===b.role?0:a.role==="head"?-1:1) || a.name.localeCompare(b.name, "ru"));
+    // Deduplicate by name: for teachers with same name, keep account with lowest id (oldest)
+    const nameMap = new Map();
+    for (const a of shown) {
+      const key = a.role === "teacher" ? a.name.trim() : null; // only dedup teachers
+      if (key) {
+        const existing = nameMap.get(key);
+        if (!existing || a.id < existing.id) nameMap.set(key, a);
+      }
+    }
+    const deduped = shown.filter(a => a.role !== "teacher" || nameMap.get(a.name.trim()) === a);
+    const sorted = deduped.slice().sort((a,b) => (a.role===b.role?0:a.role==="head"?-1:1) || a.name.localeCompare(b.name, "ru"));
     for (const a of sorted) {
       const titleDisplay = a.title || (a.role === "director" ? "Директор" : a.role === "head" ? "Руководитель отделения" : "Учитель");
       const isArchived = a.is_active === false;
