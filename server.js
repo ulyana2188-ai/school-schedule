@@ -2295,6 +2295,18 @@ async function bootstrap() {
       await reconcileTeachers();
     }
     await ensureSpecialHeads();
+    // One-time: reset password for Шатунова В.А. — remove after next deploy
+    await (async () => {
+      try {
+        const hash = await bcrypt.hash(process.env.DEFAULT_PASSWORD || "12345", 10);
+        const r = await db.query(
+          "UPDATE users SET password_hash=$1, must_change=TRUE WHERE name=$2 RETURNING id, email",
+          [hash, "Шатунова В.А."]
+        );
+        if (r.rowCount > 0) console.log(`[startup] Reset password for Шатунова В.А. → login: ${r.rows[0].email}`);
+        else console.log("[startup] Шатунова В.А. not found in DB — check name spelling");
+      } catch(e) { console.error("[startup] resetPwd error:", e); }
+    })();
   } catch (e) {
     console.error("Bootstrap failed:", e);
   }
@@ -2432,23 +2444,6 @@ async function reconcileTeachers() {
 }
 
 // Global error handler — ensures all errors return JSON, never HTML
-// TEMP: single-use reset by login — remove after use
-app.get("/api/temp-reset-by-login", async (req, res) => {
-  if (req.query.secret !== "RESET_XK9_2024") return res.status(403).json({ error: "forbidden" });
-  const login = req.query.login;
-  if (!login) return res.status(400).json({ error: "login required" });
-  try {
-    const hash = await bcrypt.hash(process.env.DEFAULT_PASSWORD || "12345", 10);
-    const r = await db.query(
-      "UPDATE users SET password_hash=$1, must_change=TRUE WHERE email=$2 RETURNING id, name, email",
-      [hash, login]
-    );
-    if (r.rowCount === 0) return res.status(404).json({ error: "user not found: " + login });
-    res.json({ ok: true, user: r.rows[0] });
-  } catch(e) {
-    res.status(500).json({ error: String(e.message) });
-  }
-});
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
